@@ -102,7 +102,7 @@ app.get('/', (req, res) => {
 // Health check
 import { dbHealth } from './db';
 
-app.get('/health', async (req, res) => {
+app.get('/api/health', async (req, res) => {
   try {
     const db = await dbHealth();
     res.json({
