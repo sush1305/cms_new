@@ -7,6 +7,7 @@ import ProgramDetail from './components/ProgramDetail';
 import UserManagement from './components/UserManagement';
 import LessonEditor from './components/LessonEditor';
 import Settings from './components/Settings';
+import PublicCatalog from './components/PublicCatalog';
 import Navbar from './components/Navbar';
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -81,9 +82,10 @@ const App: React.FC = () => {
   };
 
   const setViewFromNavbar = (v: 'dashboard' | 'catalog' | 'users' | 'settings') => {
+    console.log('🔵 setViewFromNavbar called with:', v);
     if (v === 'catalog') {
-      // For now, catalog navigates to the dashboard (could be a dedicated catalog page later)
-      setCurrentScreen('dashboard');
+      console.log('✅ Setting currentScreen to catalog');
+      setCurrentScreen('catalog');
     } else if (v === 'users') {
       setCurrentScreen('users');
     } else if (v === 'settings') {
@@ -109,6 +111,8 @@ const App: React.FC = () => {
           onLanguageChange={(lang) => setCurrentLanguage(lang)}
         />
 
+        {console.log('📺 Current screen rendering:', currentScreen)}
+
         {currentScreen === 'program' && (
           <ProgramDetail
             id={currentProgramId}
@@ -133,14 +137,24 @@ const App: React.FC = () => {
           />
         )}
 
-        {(currentScreen === 'dashboard' || currentScreen === 'catalog' || currentScreen === 'settings') && (
-          <Dashboard
-            user={user}
-            onLogout={handleLogout}
-            onViewProgram={handleViewProgram}
-            onViewUsers={handleViewUsers}
-            onViewSettings={handleViewSettings}
-          />
+        {currentScreen === 'catalog' && (
+          <>
+            {console.log('🎯 Rendering PublicCatalog component')}
+            <PublicCatalog />
+          </>
+        )}
+
+        {(currentScreen === 'dashboard' || currentScreen === 'settings') && (
+          <>
+            {console.log('📚 Rendering Dashboard component')}
+            <Dashboard
+              user={user}
+              onLogout={handleLogout}
+              onViewProgram={handleViewProgram}
+              onViewUsers={handleViewUsers}
+              onViewSettings={handleViewSettings}
+            />
+          </>
         )}
       </div>
     </ErrorBoundary>

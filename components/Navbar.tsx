@@ -129,7 +129,9 @@ const Navbar: React.FC<NavbarProps> = ({
             
             <button 
               onClick={() => setView('catalog' as any)}
-              className="px-5 py-2.5 text-slate-500 hover:bg-slate-50 rounded-xl font-black text-sm uppercase tracking-widest transition-all"
+              className={`px-5 py-2.5 rounded-xl font-black text-sm uppercase tracking-widest transition-all ${
+                activeView === 'catalog' ? 'bg-black text-amber-400 shadow-lg' : 'text-slate-500 hover:bg-slate-50'
+              }`}
             >
               {t.publicApi}
             </button>

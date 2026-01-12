@@ -14,6 +14,8 @@ const LessonEditor: React.FC<LessonEditorProps> = ({ id, onBack, role }) => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [scheduleMinutes, setScheduleMinutes] = useState('2');
 
   useEffect(() => {
     loadAssets();
@@ -57,16 +59,15 @@ const LessonEditor: React.FC<LessonEditorProps> = ({ id, onBack, role }) => {
   };
 
   const handleSchedulePublish = () => {
-    if (!lesson) return;
-    const publishAt = prompt('Enter publish date/time (YYYY-MM-DD HH:MM):');
-    if (publishAt) {
-      const publishDate = new Date(publishAt);
-      setLesson({
-        ...lesson,
-        status: Status.SCHEDULED,
-        publish_at: publishDate.toISOString()
-      });
-    }
+    if (!lesson || !scheduleMinutes || isNaN(Number(scheduleMinutes))) return;
+    const publishDate = new Date();
+    publishDate.setMinutes(publishDate.getMinutes() + Number(scheduleMinutes));
+    setLesson({
+      ...lesson,
+      status: Status.SCHEDULED,
+      publish_at: publishDate.toISOString()
+    });
+    setScheduleModalOpen(false);
   };
 
   const handlePublishNow = () => {
@@ -181,10 +182,10 @@ const LessonEditor: React.FC<LessonEditorProps> = ({ id, onBack, role }) => {
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Available Languages</label>
                 <input
                   type="text"
-                  value={lesson.content_languages_available.join(', ')}
+                  value={(lesson.content_languages_available || []).join(', ')}
                   onChange={(e) => setLesson({...lesson, content_languages_available: e.target.value.split(',').map(s => s.trim())})}
                   className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl py-5 px-8 focus:bg-white focus:border-amber-400 outline-none font-black text-slate-900 transition-all"
-                  placeholder="e.g., English, Spanish"
+                  placeholder="e.g., en, hi"
                 />
               </div>
               <div className="space-y-3">
@@ -204,16 +205,16 @@ const LessonEditor: React.FC<LessonEditorProps> = ({ id, onBack, role }) => {
 
           <div className="space-y-6">
             <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Content URLs</h3>
-            {lesson.content_languages_available.map(lang => (
+            {(lesson.content_languages_available || []).map(lang => (
               <div key={lang} className="space-y-3">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{lang.toUpperCase()} URL</label>
                 <input
                   type="url"
-                  value={lesson.content_urls_by_language[lang] || ''}
+                  value={(lesson.content_urls_by_language || {})[lang] || ''}
                   onChange={(e) => setLesson({
                     ...lesson,
                     content_urls_by_language: {
-                      ...lesson.content_urls_by_language,
+                      ...(lesson.content_urls_by_language || {}),
                       [lang]: e.target.value
                     }
                   })}
@@ -263,10 +264,10 @@ const LessonEditor: React.FC<LessonEditorProps> = ({ id, onBack, role }) => {
 
           <div className="flex gap-4 pt-8 border-t border-slate-200">
             <button
-              onClick={handleSchedulePublish}
+              onClick={() => setScheduleModalOpen(true)}
               className="flex-1 bg-amber-400 text-black hover:bg-amber-500 font-black py-4 px-8 rounded-2xl transition-all transform hover:-translate-y-0.5 active:scale-95 uppercase text-sm tracking-widest"
             >
-              Schedule Publish
+              📅 Schedule Publish
             </button>
             <button
               onClick={handlePublishNow}
@@ -277,6 +278,38 @@ const LessonEditor: React.FC<LessonEditorProps> = ({ id, onBack, role }) => {
           </div>
         </div>
       </div>
+
+      {scheduleModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <h3 className="text-2xl font-black mb-6 uppercase tracking-tight text-slate-900">Schedule Publish</h3>
+            <div className="space-y-6">
+              <div>
+                <label className="block text-xs font-black text-slate-400 uppercase mb-3 tracking-widest">Minutes from now</label>
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="Enter minutes"
+                  value={scheduleMinutes}
+                  onChange={(e) => setScheduleMinutes(e.target.value)}
+                  className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 focus:border-amber-400 outline-none font-bold"
+                />
+              </div>
+              <div className="bg-amber-50 rounded-xl p-4 text-sm text-slate-700 font-bold">
+                Will publish at: <span className="font-black">{new Date(new Date().getTime() + Number(scheduleMinutes || 0) * 60000).toLocaleString()}</span>
+              </div>
+            </div>
+            <div className="flex gap-4 mt-8">
+              <button onClick={handleSchedulePublish} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-black text-sm uppercase tracking-widest transition-all">
+                Schedule
+              </button>
+              <button onClick={() => setScheduleModalOpen(false)} className="flex-1 bg-slate-200 hover:bg-slate-300 text-black px-6 py-3 rounded-xl font-black text-sm uppercase tracking-widest transition-all">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

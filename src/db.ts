@@ -672,7 +672,28 @@ export async function getPublishedProgramsCursor(opts: { limit?: number; cursor?
       nextCursor = Buffer.from(`${last.published_at}|${last.id}`).toString('base64');
     }
 
-    return { items: page.slice(0, limit), nextCursor };
+    // Enrich offline data with assets and topics
+    const enrichedItems = page.slice(0, limit).map((program: any) => {
+      const assets = storeDb.getAssets().filter((a: any) => a.parent_id === program.id);
+      const topics = program.topicIds.map((tid: string) => {
+        const t = storeDb.getTopics().find((x: any) => x.id === tid);
+        return t ? t.name : null;
+      }).filter(Boolean);
+
+      return {
+        ...program,
+        assets: {
+          posters: assets.reduce((acc: Record<string, Record<string, string>>, asset: any) => {
+            if (!acc[asset.language]) acc[asset.language] = {};
+            acc[asset.language][asset.variant] = asset.url;
+            return acc;
+          }, {})
+        },
+        topics
+      };
+    });
+
+    return { items: enrichedItems, nextCursor };
   }
 
   const params: any[] = [ Status.PUBLISHED ];
@@ -707,9 +728,11 @@ export async function getPublishedProgramsCursor(opts: { limit?: number; cursor?
   }
 
   const sql = `
-    SELECT p.*
+    SELECT p.*, COALESCE(ARRAY_AGG(pt.topic_id) FILTER (WHERE pt.topic_id IS NOT NULL), '{}') as topic_ids
     FROM programs p
+    LEFT JOIN program_topics pt ON p.id = pt.program_id
     WHERE ${whereClauses.join(' AND ')}
+    GROUP BY p.id
     ORDER BY p.published_at DESC NULLS LAST, p.id DESC
     LIMIT $${idx}
   `;
@@ -717,15 +740,36 @@ export async function getPublishedProgramsCursor(opts: { limit?: number; cursor?
   params.push(limit + 1);
 
   const result = await pool.query(sql, params);
-  const rows = result.rows.map(camelCaseKeys);
+  const rows = result.rows.map(row => ({
+    ...camelCaseKeys(row),
+    topicIds: row.topic_ids || []
+  }));
 
   let nextCursor = null;
   if (rows.length > limit) {
     const last = rows[limit - 1];
-    nextCursor = Buffer.from(`${last.published_at}|${last.id}`).toString('base64');
+    nextCursor = Buffer.from(`${last.publishedAt}|${last.id}`).toString('base64');
   }
 
-  return { items: rows.slice(0, limit), nextCursor };
+  // Enrich with assets and topics
+  const programs = await Promise.all(rows.slice(0, limit).map(async (program: any) => {
+    const assets = await getProgramAssets(program.id);
+    const topics = await Promise.all((program.topicIds || []).map(getTopicById));
+
+    return {
+      ...program,
+      assets: {
+        posters: assets.reduce((acc: Record<string, Record<string, string>>, asset: any) => {
+          if (!acc[asset.language]) acc[asset.language] = {};
+          acc[asset.language][asset.variant] = asset.url;
+          return acc;
+        }, {})
+      },
+      topics: topics.filter(t => t !== null).map((t: any) => t!.name)
+    };
+  }));
+
+  return { items: programs, nextCursor };
 }
 
 export async function getPublishedLessonById(id: string) {

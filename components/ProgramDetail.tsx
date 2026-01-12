@@ -22,6 +22,8 @@ const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson,
   const [assets, setAssets] = useState<Asset[]>([]);
   const [activeTab, setActiveTab] = useState<'info' | 'assets' | 'content'>('content');
   const [lessonsByTerm, setLessonsByTerm] = useState<Record<string, Lesson[]>>({});
+  const [termModalOpen, setTermModalOpen] = useState(false);
+  const [termTitle, setTermTitle] = useState('');
 
   useEffect(() => {
     const load = async () => {
@@ -36,6 +38,18 @@ const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson,
         setTerms(tms);
         setTopics(tpcs as any);
         setAssets(asts);
+
+        // Load lessons for each term
+        const lessonsByTermMap: Record<string, Lesson[]> = {};
+        for (const term of tms) {
+          try {
+            const lessons = await api.getLessons(term.id);
+            lessonsByTermMap[term.id] = Array.isArray(lessons) ? lessons : [];
+          } catch (e) {
+            lessonsByTermMap[term.id] = [];
+          }
+        }
+        setLessonsByTerm(lessonsByTermMap);
       } catch (err) {
         console.error('Failed to load program details', err);
       }
@@ -71,11 +85,17 @@ const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson,
 
   const handleCreateTerm = async () => {
     if (role === Role.VIEWER) return;
-    const title = prompt('Term Title:');
-    if (title === null) return;
+    setTermModalOpen(true);
+    setTermTitle('');
+  };
+
+  const handleSaveNewTerm = async () => {
+    if (!termTitle.trim()) return;
     try {
-      await api.createTerm({ program_id: id, term_number: terms.length + 1, title: title || `Term ${terms.length + 1}` });
+      await api.createTerm({ program_id: id, term_number: terms.length + 1, title: termTitle });
       showToast?.('New term created', 'success');
+      setTermModalOpen(false);
+      setTermTitle('');
       setRefreshTrigger(prev => prev + 1);
     } catch (err) {
       showToast?.('Failed to create term', 'error');
@@ -375,30 +395,57 @@ const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson,
                 <p className="text-slate-500 text-sm mt-1 font-medium">Posters and cover art used in the catalog discovery feed.</p>
              </div>
              
-             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-12">
-                {[AssetVariant.PORTRAIT, AssetVariant.LANDSCAPE, AssetVariant.SQUARE, AssetVariant.BANNER].map(variant => {
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                {[AssetVariant.PORTRAIT, AssetVariant.LANDSCAPE].map(variant => {
                   const asset = assets.find(a => a.variant === variant && a.asset_type === AssetType.POSTER);
+                  const [editingUrl, setEditingUrl] = React.useState(asset?.url || '');
+                  
                   return (
-                    <div key={variant} className="space-y-4">
-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">{variant}</label>
-                      <div className="aspect-[3/4] bg-slate-50 border-2 border-dashed border-slate-200 rounded-[2.5rem] overflow-hidden relative group hover:border-amber-400 transition-all hover:shadow-2xl hover:shadow-amber-100/50">
-                        {asset ? <img src={asset.url} alt={variant} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" /> : <div className="w-full h-full flex items-center justify-center text-slate-300 font-black uppercase text-[10px] tracking-widest">Missing</div>}
-                        {role !== Role.VIEWER && (
-                          <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 flex items-center justify-center backdrop-blur-[4px] transition-all">
-                            <button onClick={async () => {
-                              const url = prompt('Poster URL:', asset?.url || '');
-                              if (url === null) return;
+                    <div key={variant} className="space-y-4 border border-slate-200 rounded-3xl p-8 bg-slate-50">
+                      <label className="block text-sm font-black text-slate-700 uppercase tracking-wider">{variant} Poster</label>
+                      
+                      {/* Preview */}
+                      <div className="aspect-[3/4] bg-white border-2 border-dashed border-slate-300 rounded-2xl overflow-hidden relative group">
+                        {asset ? (
+                          <img src={asset.url} alt={variant} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-slate-400 font-bold uppercase text-xs">No Image</div>
+                        )}
+                      </div>
+                      
+                      {/* URL Input */}
+                      {role !== Role.VIEWER && (
+                        <div className="space-y-3">
+                          <input
+                            type="url"
+                            placeholder="https://example.com/image.jpg"
+                            defaultValue={asset?.url || ''}
+                            onChange={(e) => setEditingUrl(e.target.value)}
+                            className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-sm font-medium focus:border-amber-400 focus:outline-none"
+                          />
+                          <button
+                            onClick={async () => {
+                              if (!editingUrl.trim()) return;
                               try {
-                                await api.createAsset({ parent_id: id, language: program.language_primary, variant, asset_type: AssetType.POSTER, url });
+                                await api.createAsset({ 
+                                  parent_id: id, 
+                                  language: program.language_primary, 
+                                  variant, 
+                                  asset_type: AssetType.POSTER, 
+                                  url: editingUrl 
+                                });
                                 showToast?.('Poster updated', 'success');
                                 setRefreshTrigger(prev => prev + 1);
                               } catch (err) {
                                 showToast?.('Failed to update poster', 'error');
                               }
-                            }} className="bg-amber-400 text-black px-8 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-2xl scale-90 group-hover:scale-100 transition-all">Link Artwork</button>
-                          </div>
-                        )}
-                      </div>
+                            }}
+                            className="w-full bg-amber-400 hover:bg-amber-500 text-black px-6 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-colors"
+                          >
+                            Update Poster
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -406,8 +453,40 @@ const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson,
            </div>
         )}
       </div>
+
+      {termModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <h3 className="text-2xl font-black mb-6 uppercase tracking-tight text-slate-900">Create New Term</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-black text-slate-400 uppercase mb-3 tracking-widest">Term Title</label>
+                <input
+                  type="text"
+                  value={termTitle}
+                  onChange={(e) => setTermTitle(e.target.value)}
+                  placeholder="e.g., Unit 1: Foundations"
+                  className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 focus:border-amber-400 outline-none font-bold"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="flex gap-4 mt-8">
+              <button onClick={handleSaveNewTerm} className="flex-1 bg-amber-400 hover:bg-amber-500 text-black px-6 py-3 rounded-xl font-black text-sm uppercase tracking-widest transition-all">
+                Create Term
+              </button>
+              <button onClick={() => setTermModalOpen(false)} className="flex-1 bg-slate-200 hover:bg-slate-300 text-black px-6 py-3 rounded-xl font-black text-sm uppercase tracking-widest transition-all">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default ProgramDetail;
+
+
+

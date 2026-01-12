@@ -1,46 +1,47 @@
 
-import React, { useState, useMemo } from 'react';
-import { db } from '../store';
-import { Status, CatalogProgram, AssetType } from '../types';
+import React, { useState, useEffect } from 'react';
+import { CatalogProgram } from '../types';
 
 const PublicCatalog: React.FC = () => {
-  const [cursor, setCursor] = useState<number>(0);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [allPublished, setAllPublished] = useState<CatalogProgram[]>([]);
+  const [paginatedData, setPaginatedData] = useState<CatalogProgram[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const limit = 4;
 
-  const allPublished = useMemo(() => {
-    const publishedPrograms = db.getPrograms().filter(p => p.status === Status.PUBLISHED);
-    const topics = db.getTopics();
-    
-    // Valid catalog programs must have at least 1 published lesson
-    return publishedPrograms.map(p => {
-      const pTerms = db.getTerms(p.id).map(t => t.id);
-      const lessons = db.getLessons('').filter(l => pTerms.includes(l.term_id) && l.status === Status.PUBLISHED);
+  const fetchPrograms = async (cursorVal: string | null) => {
+    setLoading(true);
+    try {
+      const url = new URL('http://localhost:3002/api/catalog/programs');
+      url.searchParams.set('limit', limit.toString());
+      if (cursorVal) url.searchParams.set('cursor', cursorVal);
       
-      if (lessons.length === 0) return null;
-
-      const assets = db.getAssets(p.id).filter(a => a.asset_type === AssetType.POSTER);
-      const posterMap: Record<string, Record<string, string>> = {};
+      const response = await fetch(url.toString());
+      const data = await response.json();
       
-      assets.forEach(a => {
-        if (!posterMap[a.language]) posterMap[a.language] = {};
-        posterMap[a.language][a.variant] = a.url;
-      });
+      console.log('📡 Fetched programs:', data);
+      
+      setPaginatedData(data.items || []);
+      setNextCursor(data.nextCursor || null);
+      
+      if (!cursorVal) {
+        setAllPublished(data.items || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch programs:', error);
+      setPaginatedData([]);
+      setNextCursor(null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      return {
-        ...p,
-        topics: p.topicIds.map(tid => topics.find(t => t.id === tid)?.name || ''),
-        assets: { posters: posterMap }
-      } as CatalogProgram;
-    })
-    .filter((p): p is CatalogProgram => p !== null)
-    .sort((a, b) => new Date(b.published_at || 0).getTime() - new Date(a.published_at || 0).getTime());
-  }, []);
+  useEffect(() => {
+    fetchPrograms(cursor);
+  }, [cursor]);
 
-  const paginatedData = useMemo(() => {
-      return allPublished.slice(cursor, cursor + limit);
-  }, [allPublished, cursor]);
 
-  const nextCursor = cursor + limit < allPublished.length ? cursor + limit : null;
 
   return (
     <div className="bg-slate-950 min-h-screen text-white font-sans selection:bg-amber-500 selection:text-white pb-32">
@@ -74,15 +75,15 @@ const PublicCatalog: React.FC = () => {
             </div>
             <div className="flex space-x-2">
                 <button 
-                    disabled={cursor === 0}
-                    onClick={() => setCursor(Math.max(0, cursor - limit))}
+                    disabled={cursor === null}
+                    onClick={() => setCursor(null)}
                     className="px-3 py-1 bg-slate-800 rounded-lg text-[10px] font-bold disabled:opacity-30"
                 >
                     PREV
                 </button>
                 <button 
-                    disabled={nextCursor === null}
-                    onClick={() => setCursor(nextCursor!)}
+                    disabled={!nextCursor || loading}
+                    onClick={() => nextCursor && setCursor(nextCursor)}
                     className="px-3 py-1 bg-slate-800 rounded-lg text-[10px] font-bold disabled:opacity-30"
                 >
                     NEXT
@@ -90,7 +91,7 @@ const PublicCatalog: React.FC = () => {
             </div>
           </div>
           <pre className="text-sm font-mono text-amber-200/90 overflow-auto max-h-[500px] leading-relaxed custom-scrollbar p-2">
-            {JSON.stringify({
+            {loading ? 'Loading...' : JSON.stringify({
                 data: paginatedData,
                 pagination: {
                     next_cursor: nextCursor,
@@ -112,7 +113,7 @@ const PublicCatalog: React.FC = () => {
               <div key={p.id} className="group relative rounded-[2rem] overflow-hidden shadow-2xl bg-slate-900 hover:ring-4 ring-amber-600/50 transition-all duration-500">
                 <div className="aspect-[3/5] relative">
                   <img 
-                    src={p.assets.posters[p.language_primary]?.portrait || 'https://picsum.photos/400/600?seed=' + p.id} 
+                    src={p.assets?.posters?.[p.language_primary]?.portrait || 'https://picsum.photos/400/600?seed=' + p.id} 
                     alt={p.title} 
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000"
                   />
@@ -120,7 +121,7 @@ const PublicCatalog: React.FC = () => {
                   
                   <div className="absolute bottom-0 p-8 space-y-4">
                     <div className="flex flex-wrap gap-2">
-                      {p.topics.map(t => <span key={t} className="text-[9px] bg-amber-600 px-3 py-1 rounded-full font-black uppercase tracking-widest shadow-lg">{t}</span>)}
+                      {p.topics?.map(t => <span key={t} className="text-[9px] bg-amber-600 px-3 py-1 rounded-full font-black uppercase tracking-widest shadow-lg">{t}</span>)}
                     </div>
                     <div>
                       <h4 className="text-2xl font-black mb-2 leading-tight uppercase tracking-tight">{p.title}</h4>
