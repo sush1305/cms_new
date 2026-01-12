@@ -427,9 +427,17 @@ export async function updateLesson(id: string, lesson: Partial<Lesson>): Promise
     storeDb.updateLesson(updated);
     return updated;
   }
-  const fields = Object.keys(lesson);
-  const values = Object.values(lesson);
-  const setClause = fields.map((field, index) => `${field.replace(/([A-Z])/g, '_$1').toLowerCase()} = $${index + 2}`).join(', ');
+  
+  // Map camelCase field names to snake_case, deduplicate
+  const snakeCaseFields: Record<string, any> = {};
+  for (const [key, value] of Object.entries(lesson)) {
+    const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+    snakeCaseFields[snakeKey] = value;
+  }
+
+  const fields = Object.keys(snakeCaseFields);
+  const values = Object.values(snakeCaseFields);
+  const setClause = fields.map((field, index) => `${field} = $${index + 2}`).join(', ');
 
   const result = await pool.query(
     `UPDATE lessons SET ${setClause}, updated_at = NOW() WHERE id = $1 RETURNING *`,

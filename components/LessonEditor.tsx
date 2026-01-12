@@ -58,25 +58,51 @@ const LessonEditor: React.FC<LessonEditorProps> = ({ id, onBack, role }) => {
     }
   };
 
-  const handleSchedulePublish = () => {
+  const handleSchedulePublish = async () => {
     if (!lesson || !scheduleMinutes || isNaN(Number(scheduleMinutes))) return;
     const publishDate = new Date();
     publishDate.setMinutes(publishDate.getMinutes() + Number(scheduleMinutes));
-    setLesson({
+    const updatedLesson = {
       ...lesson,
       status: Status.SCHEDULED,
       publish_at: publishDate.toISOString()
-    });
+    };
+    setLesson(updatedLesson);
     setScheduleModalOpen(false);
+    
+    // Save immediately
+    setSaving(true);
+    try {
+      await api.updateLesson(id, updatedLesson);
+      setError('');
+    } catch (error) {
+      setError('Failed to schedule lesson');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handlePublishNow = () => {
+  const handlePublishNow = async () => {
     if (!lesson) return;
-    setLesson({
+    const now = new Date().toISOString();
+    const updatedLesson = {
       ...lesson,
       status: Status.PUBLISHED,
-      published_at: new Date().toISOString()
-    });
+      publish_at: now,
+      published_at: now
+    };
+    setLesson(updatedLesson);
+    
+    // Save immediately
+    setSaving(true);
+    try {
+      await api.updateLesson(id, updatedLesson);
+      setError('');
+    } catch (error) {
+      setError('Failed to publish lesson');
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (role === Role.VIEWER) {
