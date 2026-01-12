@@ -69,6 +69,7 @@ app.use(cors({
   origin: [
     'http://localhost:3001',
     'http://localhost:3000',
+    'https://cms-k08h0bygo-sushmitha-mittapallys-projects.vercel.app',
     /\.vercel\.app$/,  // Allow all Vercel preview/production domains
     /\.railway\.app$/  // Allow Railway domains
   ],

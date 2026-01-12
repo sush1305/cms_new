@@ -14,6 +14,6 @@ jobs:
           curl -X POST \
             -H "Authorization: Bearer $CRON_SECRET" \
             -H "Content-Type: application/json" \
-            https://your-app.vercel.app/api/cron/publish
+            https://chaishorts-api.onrender.com/api/cron/publish
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
