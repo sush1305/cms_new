@@ -135,8 +135,13 @@ const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson,
 
   const handleAddLesson = async (termId: string) => {
     if (role === Role.VIEWER) return;
+    if (!program) {
+      showToast?.('Program not loaded yet', 'error');
+      return;
+    }
     try {
-      const newLesson = await api.createLesson({
+      const primaryLang = (program as any).languagePrimary || program.language_primary || 'en';
+      const newLessonData = {
         term_id: termId,
         lesson_number: (lessonsByTerm[termId] || []).length + 1,
         title: 'Untitled Lesson',
@@ -144,16 +149,20 @@ const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson,
         content_type: 'video' as any,
         duration_ms: 300000,
         is_paid: false,
-        content_language_primary: program!.language_primary,
-        content_languages_available: [program!.language_primary],
-        content_urls_by_language: { [program!.language_primary]: '' },
+        content_language_primary: primaryLang,
+        content_languages_available: [primaryLang],
+        content_urls_by_language: { [primaryLang]: '' },
         subtitle_languages: [],
         subtitle_urls_by_language: {}
-      });
+      };
+      console.log('Creating lesson with data:', newLessonData);
+      console.log('Program language:', primaryLang);
+      const newLesson = await api.createLesson(newLessonData);
       showToast?.('Draft lesson added', 'success');
       onEditLesson(newLesson.id);
-    } catch (err) {
-      showToast?.('Failed to add lesson', 'error');
+    } catch (err: any) {
+      console.error('Failed to add lesson:', err);
+      showToast?.(`Failed to add lesson: ${err.message || 'Unknown error'}`, 'error');
     }
   };
 

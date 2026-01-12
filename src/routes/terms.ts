@@ -23,10 +23,25 @@ router.post('/:termId/lessons', authenticateToken, requireRole(Role.EDITOR), asy
 
     // Basic validation to mirror lessons route
     if (lessonData.content_type === 'video' && (lessonData.duration_ms === null || lessonData.duration_ms === undefined || lessonData.duration_ms < 0)) {
+      console.error('Validation failed: duration_ms', lessonData.duration_ms);
       return res.status(400).json({ error: 'Video lessons require positive duration_ms' });
     }
 
-    if (!lessonData.content_languages_available || !lessonData.content_languages_available.includes(lessonData.content_language_primary)) {
+    if (!lessonData.content_languages_available || !Array.isArray(lessonData.content_languages_available)) {
+      console.error('Validation failed: content_languages_available not an array', lessonData.content_languages_available);
+      return res.status(400).json({ error: 'content_languages_available must be an array' });
+    }
+
+    if (!lessonData.content_language_primary) {
+      console.error('Validation failed: missing content_language_primary');
+      return res.status(400).json({ error: 'content_language_primary is required' });
+    }
+
+    if (!lessonData.content_languages_available.includes(lessonData.content_language_primary)) {
+      console.error('Validation failed: Primary language not in available languages', {
+        primary: lessonData.content_language_primary,
+        available: lessonData.content_languages_available
+      });
       return res.status(400).json({ error: 'Primary content language must be included in content_languages_available' });
     }
 
