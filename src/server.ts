@@ -109,7 +109,45 @@ app.get('/health', async (req, res) => {
     res.status(500).json({ error: 'Health check failed' });
   }
 });
+// Manual migration trigger (for deployment troubleshooting)
+app.get('/api/migrate', async (req, res) => {
+  try {
+    await runMigrations();
+    res.json({ success: true, message: 'Migrations completed' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
+// Seed admin user endpoint
+app.get('/api/seed', async (req, res) => {
+  try {
+    const bcrypt = await import('bcryptjs');
+    const { Pool } = await import('pg');
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    
+    // Check if admin exists
+    const existing = await pool.query("SELECT * FROM users WHERE email = 'admin@chaishorts.com'");
+    
+    if (existing.rows.length > 0) {
+      await pool.end();
+      return res.json({ message: 'Admin already exists' });
+    }
+
+    // Create admin user
+    const hashedPassword = await bcrypt.hash('admin123', 10);
+    await pool.query(
+      "INSERT INTO users (username, email, password, role) VALUES ($1, $2, $3, $4)",
+      ['admin', 'admin@chaishorts.com', hashedPassword, 'admin']
+    );
+    
+    await pool.end();
+    res.json({ message: 'Admin user created successfully' });
+  } catch (error: any) {
+    console.error('Seed error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/programs', programRoutes);
