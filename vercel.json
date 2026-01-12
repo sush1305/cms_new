@@ -18,11 +18,5 @@
       "src": "/(.*)",
       "dest": "/dist/$1"
     }
-  ],
-  "crons": [
-    {
-      "path": "/api/cron/publish",
-      "schedule": "* * * * *"
-    }
   ]
 }
