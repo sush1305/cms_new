@@ -36,55 +36,72 @@ async function processScheduledLessons() {
       return;
     }
 
-    // Update lessons to published status; set published_at only if not already set
-    const lessonIds = scheduledLessons.map(l => l.id);
-    await client.query(`
-      UPDATE lessons
-      SET status = 'published',
-          published_at = COALESCE(published_at, NOW()),
-          updated_at = NOW()
-      WHERE id = ANY($1)
-    `, [lessonIds]);
+    const successfulLessons = [];
+    const failedLessons = [];
 
-    // Auto-publish programs if they have their first published lesson
-    const termIds = [...new Set(scheduledLessons.map(l => l.term_id))];
-    const programIdsResult = await client.query(`
-      SELECT DISTINCT p.id
-      FROM programs p
-      JOIN terms t ON t.program_id = p.id
-      WHERE t.id = ANY($1)
-    `, [termIds]);
-
-    for (const programRow of programIdsResult.rows) {
-      const programId = programRow.id;
-
-      // Check if program has any published lessons (including the ones we just published)
-      const hasPublishedResult = await client.query(`
-        SELECT EXISTS (
-          SELECT 1
-          FROM lessons l
-          JOIN terms t ON t.id = l.term_id
-          WHERE t.program_id = $1
-          AND l.status = 'published'
-        )
-      `, [programId]);
-
-      const hasPublished = hasPublishedResult.rows[0].exists;
-
-      if (hasPublished) {
+    // Process each lesson individually so one failure doesn't block others
+    for (const lesson of scheduledLessons) {
+      try {
         await client.query(`
-          UPDATE programs
+          UPDATE lessons
           SET status = 'published',
               published_at = COALESCE(published_at, NOW()),
               updated_at = NOW()
           WHERE id = $1
-          AND status != 'published'
+        `, [lesson.id]);
+        successfulLessons.push(lesson);
+      } catch (error: any) {
+        // Log the error but continue with other lessons
+        if (error.message && error.message.includes('thumbnail')) {
+          console.warn(`[Worker] Lesson ${lesson.id} cannot publish - missing thumbnails`);
+        } else {
+          console.error(`[Worker] Error publishing lesson ${lesson.id}:`, error.message);
+        }
+        failedLessons.push(lesson);
+      }
+    }
+
+    // Auto-publish programs only for successfully published lessons
+    const successfulTermIds = [...new Set(successfulLessons.map(l => l.term_id))];
+    if (successfulTermIds.length > 0) {
+      const programIdsResult = await client.query(`
+        SELECT DISTINCT p.id
+        FROM programs p
+        JOIN terms t ON t.program_id = p.id
+        WHERE t.id = ANY($1)
+      `, [successfulTermIds]);
+
+      for (const programRow of programIdsResult.rows) {
+        const programId = programRow.id;
+
+        // Check if program has any published lessons (including the ones we just published)
+        const hasPublishedResult = await client.query(`
+          SELECT EXISTS (
+            SELECT 1
+            FROM lessons l
+            JOIN terms t ON t.id = l.term_id
+            WHERE t.program_id = $1
+            AND l.status = 'published'
+          )
         `, [programId]);
+
+        const hasPublished = hasPublishedResult.rows[0].exists;
+
+        if (hasPublished) {
+          await client.query(`
+            UPDATE programs
+            SET status = 'published',
+                published_at = COALESCE(published_at, NOW()),
+                updated_at = NOW()
+            WHERE id = $1
+            AND status != 'published'
+          `, [programId]);
+        }
       }
     }
 
     await client.query('COMMIT');
-    console.log(`[Worker] Auto-published ${scheduledLessons.length} lessons`);
+    console.log(`[Worker] Auto-published ${successfulLessons.length} lessons${failedLessons.length > 0 ? `, ${failedLessons.length} failed (likely missing thumbnails)` : ''}`);
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('[Worker] Error processing scheduled lessons:', error);

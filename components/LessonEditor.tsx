@@ -16,6 +16,7 @@ const LessonEditor: React.FC<LessonEditorProps> = ({ id, onBack, role }) => {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [scheduleMinutes, setScheduleMinutes] = useState('2');
+  const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
 
   useEffect(() => {
     loadAssets();
@@ -60,6 +61,16 @@ const LessonEditor: React.FC<LessonEditorProps> = ({ id, onBack, role }) => {
 
   const handleSchedulePublish = async () => {
     if (!lesson || !scheduleMinutes || isNaN(Number(scheduleMinutes))) return;
+    
+    // Check if lesson has required thumbnails
+    const portraitThumbnails = (lesson.lesson_assets || []).filter(a => a.variant === 'portrait');
+    const landscapeThumbnails = (lesson.lesson_assets || []).filter(a => a.variant === 'landscape');
+    
+    if (portraitThumbnails.length === 0 || landscapeThumbnails.length === 0) {
+      setError('⚠️ Warning: This lesson is missing required thumbnail assets (portrait/landscape). It will not auto-publish at the scheduled time. Please add thumbnails in the Assets tab.');
+      return;
+    }
+    
     const publishDate = new Date();
     publishDate.setMinutes(publishDate.getMinutes() + Number(scheduleMinutes));
     
@@ -258,7 +269,7 @@ const LessonEditor: React.FC<LessonEditorProps> = ({ id, onBack, role }) => {
                 {[AssetVariant.PORTRAIT, AssetVariant.LANDSCAPE].map(variant => {
                   const asset = assets.find(a => a.variant === variant && a.asset_type === AssetType.THUMBNAIL);
                   return (
-                    <div key={variant} className="space-y-2">
+                    <div key={variant} className="space-y-3">
                       <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{variant}</label>
                       <div className="aspect-[3/4] bg-slate-50 border-2 border-dashed border-slate-200 rounded-[1.25rem] overflow-hidden flex items-center justify-center">
                         {asset ? (
@@ -267,22 +278,28 @@ const LessonEditor: React.FC<LessonEditorProps> = ({ id, onBack, role }) => {
                           <div className="text-slate-300 text-[10px] font-black uppercase tracking-widest">Missing</div>
                         )}
                       </div>
-                      <div className="flex items-center gap-3">
-                        <button onClick={async () => {
-                          const url = prompt('Thumbnail URL:', asset?.url || '');
-                          if (url === null) return;
-                          try {
-                            await api.createAsset({ parent_id: id, language: lesson.content_language_primary, variant, asset_type: AssetType.THUMBNAIL, url });
-                            alert('Thumbnail updated');
-                            loadAssets();
-                          } catch (err) {
-                            setError('Failed to update thumbnail');
-                          }
-                        }} className="bg-amber-400 text-black py-2 px-4 rounded-2xl font-black text-[10px] uppercase tracking-widest">Link Thumbnail</button>
-                        {asset && (
-                          <span className="text-[10px] font-black text-slate-400">{asset.url}</span>
-                        )}
-                      </div>
+                      <input
+                        type="text"
+                        placeholder={`Enter ${variant.toLowerCase()} thumbnail URL`}
+                        value={thumbnailUrls[variant] || asset?.url || ''}
+                        onChange={(e) => setThumbnailUrls(prev => ({ ...prev, [variant]: e.target.value }))}
+                        className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:border-amber-400 outline-none"
+                      />
+                      <button onClick={async () => {
+                        const url = thumbnailUrls[variant] || asset?.url || '';
+                        if (!url) {
+                          setError('Please enter a thumbnail URL');
+                          return;
+                        }
+                        try {
+                          await api.createAsset({ parent_id: id, language: lesson?.content_language_primary || 'en', variant, asset_type: AssetType.THUMBNAIL, url });
+                          setError('✓ Thumbnail updated successfully');
+                          setThumbnailUrls(prev => ({ ...prev, [variant]: '' }));
+                          loadAssets();
+                        } catch (err) {
+                          setError('Failed to update thumbnail');
+                        }
+                      }} className="w-full bg-amber-400 text-black py-2 px-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-amber-500 transition-colors">Save {variant} Thumbnail</button>
                     </div>
                   );
                 })}

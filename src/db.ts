@@ -696,7 +696,7 @@ export async function getPublishedProgramsCursor(opts: { limit?: number; cursor?
 
     // Enrich offline data with assets and topics
     const enrichedItems = page.slice(0, limit).map((program: any) => {
-      const assets = storeDb.getAssets().filter((a: any) => a.parent_id === program.id);
+      const assets = storeDb.getAssets(program.id).filter((a: any) => a.parent_id === program.id);
       const topics = program.topicIds.map((tid: string) => {
         const t = storeDb.getTopics().find((x: any) => x.id === tid);
         return t ? t.name : null;
