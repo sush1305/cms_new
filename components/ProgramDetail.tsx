@@ -62,8 +62,6 @@ const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson,
     return () => clearInterval(interval);
   }, [id, refreshTrigger]);
 
-  if (!program) return <div className="p-20 text-center font-black text-slate-400 uppercase tracking-widest">Program not found</div>;
-
   const handleUpdate = async () => {
     if (!program) return;
     try {
@@ -173,7 +171,11 @@ const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson,
 
   return (
     <div className="space-y-8 pb-20 animate-fade-in">
-      {/* Breadcrumbs & Header */}
+      {!program ? (
+        <div className="p-20 text-center font-black text-slate-400 uppercase tracking-widest">Program not found</div>
+      ) : (
+        <>
+          {/* Breadcrumbs & Header */}
       <nav className="flex items-center space-x-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2">
         <button onClick={onBack} className="hover:text-amber-600 transition-colors">Library</button>
         <span>/</span>
@@ -502,6 +504,8 @@ const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson,
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );
