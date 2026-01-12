@@ -1,5 +1,5 @@
 import express from 'express';
-import { getProgramWithAssets, getPublishedProgramsCursor, getPublishedLessonById } from '../db';
+import { getProgramWithAssets, getPublishedProgramsCursor, getPublishedLessonById, isOffline } from '../db';
 
 const router = express.Router();
 
@@ -11,6 +11,8 @@ router.get('/programs', async (req, res) => {
     const cursor = req.query.cursor as string | undefined;
     const language = req.query.language as string | undefined;
     const topic = req.query.topic as string | undefined;
+
+    console.log(`[Catalog] Using ${isOffline ? 'OFFLINE' : 'DATABASE'} mode`);
 
     const { items, nextCursor } = await getPublishedProgramsCursor({ limit, cursor: cursor || null, language: language || null, topic: topic || null });
 
