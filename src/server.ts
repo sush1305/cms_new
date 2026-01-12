@@ -94,6 +94,11 @@ app.use((req, res, next) => {
   next();
 });
 
+// Root route
+app.get('/', (req, res) => {
+  res.json({ message: 'ChaiShorts CMS API', version: '1.0.0' });
+});
+
 // Health check
 import { dbHealth } from './db';
 
