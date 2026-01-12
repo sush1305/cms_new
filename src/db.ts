@@ -103,6 +103,7 @@ export async function initDb() {
 // Utility function to convert snake_case to camelCase
 function camelCaseKeys(obj: any): any {
   if (obj === null || typeof obj !== 'object') return obj;
+  if (obj instanceof Date) return obj.toISOString();
   if (Array.isArray(obj)) return obj.map(camelCaseKeys);
 
   const result: any = {};
@@ -704,9 +705,6 @@ export async function getPublishedProgramsCursor(opts: { limit?: number; cursor?
 
       return {
         ...program,
-        createdAt: program.createdAt?.toISOString?.() || program.createdAt,
-        updatedAt: program.updatedAt?.toISOString?.() || program.updatedAt,
-        publishedAt: program.publishedAt?.toISOString?.() || program.publishedAt,
         assets: {
           posters: assets.reduce((acc: Record<string, Record<string, string>>, asset: any) => {
             if (!acc[asset.language]) acc[asset.language] = {};
@@ -783,9 +781,6 @@ export async function getPublishedProgramsCursor(opts: { limit?: number; cursor?
 
     return {
       ...program,
-      createdAt: program.createdAt?.toISOString?.() || program.createdAt,
-      updatedAt: program.updatedAt?.toISOString?.() || program.updatedAt,
-      publishedAt: program.publishedAt?.toISOString?.() || program.publishedAt,
       assets: {
         posters: assets.reduce((acc: Record<string, Record<string, string>>, asset: any) => {
           if (!acc[asset.language]) acc[asset.language] = {};
@@ -807,9 +802,6 @@ export async function getPublishedLessonById(id: string) {
   const assets = await getLessonAssets(id);
   return { 
     ...lesson,
-    createdAt: lesson.createdAt?.toISOString?.() || lesson.createdAt,
-    updatedAt: lesson.updatedAt?.toISOString?.() || lesson.updatedAt,
-    publishedAt: lesson.publishedAt?.toISOString?.() || lesson.publishedAt,
     assets: assets.reduce((acc: any, a: any) => {
       if (!acc[a.language]) acc[a.language] = {};
       acc[a.language][a.variant] = a.url;
