@@ -126,6 +126,35 @@ app.get('/api/migrate', async (req, res) => {
 });
 
 // Seed admin user endpoint
+// Seed database with initial data
+async function seedDatabase() {
+  try {
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    
+    // Check if admin exists
+    const existing = await pool.query("SELECT * FROM users WHERE email = 'admin@chaishorts.com'");
+    
+    if (existing.rows.length > 0) {
+      console.log('[Seed] Admin user already exists, skipping...');
+      await pool.end();
+      return;
+    }
+
+    // Create admin user
+    console.log('[Seed] Creating admin user...');
+    const hashedPassword = await bcrypt.hash('admin123', 10);
+    await pool.query(
+      "INSERT INTO users (username, email, password, role) VALUES ($1, $2, $3, $4)",
+      ['admin', 'admin@chaishorts.com', hashedPassword, 'admin']
+    );
+    console.log('[Seed] Admin user created successfully ✓');
+    
+    await pool.end();
+  } catch (error: any) {
+    console.error('[Seed] Error:', error.message);
+  }
+}
+
 app.get('/api/seed', async (req, res) => {
   try {
     const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -191,8 +220,11 @@ async function startServer() {
     console.log('[Server] Initializing database connection...');
     await initDb();
     console.log('[Server] Database connected successfully ✓');
+
+    console.log('[Server] Seeding initial data...');
+    await seedDatabase();
   } catch (error: any) {
-    console.warn('[Server] Database connection failed:', error.message);
+    console.warn('[Server] Database initialization failed:', error.message);
   }
 
   app.listen(PORT, () => {
