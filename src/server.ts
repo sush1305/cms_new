@@ -65,7 +65,15 @@ const app = express();
 const PORT = process.env.TEST_PORT || process.env.PORT || 3000;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:3001',
+    'http://localhost:3000',
+    /\.vercel\.app$/,  // Allow all Vercel preview/production domains
+    /\.railway\.app$/  // Allow Railway domains
+  ],
+  credentials: true
+}));
 app.use(express.json());
 
 // Structured request logging
