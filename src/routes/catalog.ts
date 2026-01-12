@@ -14,6 +14,11 @@ router.get('/programs', async (req, res) => {
 
     const { items, nextCursor } = await getPublishedProgramsCursor({ limit, cursor: cursor || null, language: language || null, topic: topic || null });
 
+    // Debug log
+    if (items.length > 0) {
+      console.log('[Catalog] First program:', JSON.stringify(items[0], null, 2));
+    }
+
     // Cache for 60 seconds
     res.set('Cache-Control', 'public, max-age=60');
     res.json({ items, nextCursor });
