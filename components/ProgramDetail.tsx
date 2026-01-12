@@ -55,6 +55,10 @@ const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson,
       }
     };
     load();
+
+    // Set up auto-refresh every 30 seconds to detect worker-published lessons
+    const interval = setInterval(load, 30000);
+    return () => clearInterval(interval);
   }, [id, refreshTrigger]);
 
   if (!program) return <div className="p-20 text-center font-black text-slate-400 uppercase tracking-widest">Program not found</div>;

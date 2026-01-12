@@ -62,14 +62,11 @@ const LessonEditor: React.FC<LessonEditorProps> = ({ id, onBack, role }) => {
   const handleSchedulePublish = async () => {
     if (!lesson || !scheduleMinutes || isNaN(Number(scheduleMinutes))) return;
     
-    // Check if lesson has required thumbnails
-    const portraitThumbnails = (lesson.lesson_assets || []).filter(a => a.variant === 'portrait');
-    const landscapeThumbnails = (lesson.lesson_assets || []).filter(a => a.variant === 'landscape');
+    // Check if lesson has required thumbnails using the assets array
+    const portraitThumbnails = assets.filter(a => a.variant === 'portrait' && a.asset_type === AssetType.THUMBNAIL);
+    const landscapeThumbnails = assets.filter(a => a.variant === 'landscape' && a.asset_type === AssetType.THUMBNAIL);
     
-    if (portraitThumbnails.length === 0 || landscapeThumbnails.length === 0) {
-      setError('⚠️ Warning: This lesson is missing required thumbnail assets (portrait/landscape). It will not auto-publish at the scheduled time. Please add thumbnails in the Assets tab.');
-      return;
-    }
+    const hasThumbnails = portraitThumbnails.length > 0 && landscapeThumbnails.length > 0;
     
     const publishDate = new Date();
     publishDate.setMinutes(publishDate.getMinutes() + Number(scheduleMinutes));
@@ -86,7 +83,11 @@ const LessonEditor: React.FC<LessonEditorProps> = ({ id, onBack, role }) => {
     setSaving(true);
     try {
       await api.updateLesson(id, updatedLesson);
-      setError('');
+      if (!hasThumbnails) {
+        setError('⚠️ Warning: Lesson scheduled but missing thumbnails - it will not auto-publish until you add portrait & landscape thumbnails in the Assets tab');
+      } else {
+        setError('');
+      }
     } catch (error) {
       setError('Failed to schedule lesson');
     } finally {
@@ -292,12 +293,14 @@ const LessonEditor: React.FC<LessonEditorProps> = ({ id, onBack, role }) => {
                           return;
                         }
                         try {
+                          console.log(`Saving ${variant} thumbnail with URL length: ${url.length}, URL: ${url}`);
                           await api.createAsset({ parent_id: id, language: lesson?.content_language_primary || 'en', variant, asset_type: AssetType.THUMBNAIL, url });
                           setError('✓ Thumbnail updated successfully');
                           setThumbnailUrls(prev => ({ ...prev, [variant]: '' }));
                           loadAssets();
-                        } catch (err) {
-                          setError('Failed to update thumbnail');
+                        } catch (err: any) {
+                          console.error(`Failed to update ${variant} thumbnail:`, err);
+                          setError(`Failed to update thumbnail: ${err.message || 'Unknown error'}`);
                         }
                       }} className="w-full bg-amber-400 text-black py-2 px-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-amber-500 transition-colors">Save {variant} Thumbnail</button>
                     </div>
