@@ -2,6 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { initDb } from './db';
+import fs from 'fs';
+import path from 'path';
+import { Pool } from 'pg';
 
 // Routes
 import authRoutes from './routes/auth';
@@ -13,6 +16,49 @@ import topicsRoutes from './routes/topics';
 import assetsRoutes from './routes/assets';
 
 dotenv.config();
+
+// Auto-run migrations on startup
+async function runMigrations() {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const client = await pool.connect();
+  
+  try {
+    // Ensure migrations table exists
+    await client.query(`CREATE TABLE IF NOT EXISTS migrations (id VARCHAR(255) PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+    
+    const MIGRATIONS_DIR = path.join(process.cwd(), 'migrations');
+    const files = fs.readdirSync(MIGRATIONS_DIR).filter(f => f.endsWith('.sql')).sort();
+    
+    for (const file of files) {
+      const id = file;
+      const res = await client.query('SELECT 1 FROM migrations WHERE id = $1', [id]);
+      if (res.rowCount > 0) {
+        console.log(`[Migration] Skipping ${id} (already applied)`);
+        continue;
+      }
+      
+      const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
+      console.log(`[Migration] Applying ${id}...`);
+      
+      try {
+        await client.query('BEGIN');
+        await client.query(sql);
+        await client.query('INSERT INTO migrations (id) VALUES ($1)', [id]);
+        await client.query('COMMIT');
+        console.log(`[Migration] Applied ${id} ✓`);
+      } catch (err: any) {
+        await client.query('ROLLBACK');
+        console.error(`[Migration] Failed to apply ${id}:`, err.message);
+        throw err;
+      }
+    }
+    
+    console.log('[Migration] All migrations applied successfully ✓');
+  } finally {
+    client.release();
+    await pool.end();
+  }
+}
 
 const app = express();
 // Allow tests to override port using TEST_PORT to avoid dotenv or environment conflicts
@@ -88,14 +134,18 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 // Initialize database and start server
 async function startServer() {
   try {
+    console.log('[Server] Running migrations...');
+    await runMigrations();
+    
+    console.log('[Server] Initializing database connection...');
     await initDb();
-    console.log('Database connected successfully');
-  } catch (error) {
-    console.warn('Database connection failed, starting server in offline mode:', error.message);
+    console.log('[Server] Database connected successfully ✓');
+  } catch (error: any) {
+    console.warn('[Server] Database connection failed:', error.message);
   }
 
   app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`[Server] Running on port ${PORT} ✓`);
   });
 }
 
