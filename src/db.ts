@@ -763,10 +763,16 @@ export async function getPublishedProgramsCursor(opts: { limit?: number; cursor?
   params.push(limit + 1);
 
   const result = await pool.query(sql, params);
-  const rows = result.rows.map(row => ({
-    ...camelCaseKeys(row),
-    topicIds: row.topic_ids || []
-  }));
+  const rows = result.rows.map(row => {
+    const camelized = camelCaseKeys(row);
+    return {
+      ...camelized,
+      topicIds: row.topic_ids || [],
+      createdAt: row.created_at?.toISOString?.() || camelized.createdAt,
+      updatedAt: row.updated_at?.toISOString?.() || camelized.updatedAt,
+      publishedAt: row.published_at?.toISOString?.() || camelized.publishedAt
+    };
+  });
 
   let nextCursor = null;
   if (rows.length > limit) {
