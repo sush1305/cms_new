@@ -5,6 +5,7 @@ import { initDb } from './db';
 import fs from 'fs';
 import path from 'path';
 import { Pool } from 'pg';
+import bcrypt from 'bcryptjs';
 
 // Routes
 import authRoutes from './routes/auth';
@@ -122,8 +123,6 @@ app.get('/api/migrate', async (req, res) => {
 // Seed admin user endpoint
 app.get('/api/seed', async (req, res) => {
   try {
-    const bcrypt = await import('bcryptjs');
-    const { Pool } = await import('pg');
     const pool = new Pool({ connectionString: process.env.DATABASE_URL });
     
     // Check if admin exists
