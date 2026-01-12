@@ -22,8 +22,8 @@ router.post('/:termId/lessons', authenticateToken, requireRole(Role.EDITOR), asy
     const lessonData = { ...req.body, term_id: req.params.termId };
 
     // Basic validation to mirror lessons route
-    if (lessonData.content_type === 'video' && !lessonData.duration_ms) {
-      return res.status(400).json({ error: 'Video lessons require duration_ms' });
+    if (lessonData.content_type === 'video' && (lessonData.duration_ms === null || lessonData.duration_ms === undefined || lessonData.duration_ms < 0)) {
+      return res.status(400).json({ error: 'Video lessons require positive duration_ms' });
     }
 
     if (!lessonData.content_languages_available || !lessonData.content_languages_available.includes(lessonData.content_language_primary)) {

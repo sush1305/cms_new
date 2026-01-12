@@ -62,6 +62,7 @@ const LessonEditor: React.FC<LessonEditorProps> = ({ id, onBack, role }) => {
     if (!lesson || !scheduleMinutes || isNaN(Number(scheduleMinutes))) return;
     const publishDate = new Date();
     publishDate.setMinutes(publishDate.getMinutes() + Number(scheduleMinutes));
+    
     const updatedLesson = {
       ...lesson,
       status: Status.SCHEDULED,
@@ -85,6 +86,7 @@ const LessonEditor: React.FC<LessonEditorProps> = ({ id, onBack, role }) => {
   const handlePublishNow = async () => {
     if (!lesson) return;
     const now = new Date().toISOString();
+    
     const updatedLesson = {
       ...lesson,
       status: Status.PUBLISHED,

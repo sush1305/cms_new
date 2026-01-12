@@ -431,12 +431,26 @@ export async function updateLesson(id: string, lesson: Partial<Lesson>): Promise
   // Map camelCase field names to snake_case, deduplicate
   const snakeCaseFields: Record<string, any> = {};
   for (const [key, value] of Object.entries(lesson)) {
+    // Skip undefined values and system-managed fields
+    if (value === undefined) continue;
+    
     const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+    
+    // Skip fields that shouldn't be updated directly
+    if (snakeKey === 'id' || snakeKey === 'created_at' || snakeKey === 'updated_at') continue;
+    
     snakeCaseFields[snakeKey] = value;
   }
 
   const fields = Object.keys(snakeCaseFields);
   const values = Object.values(snakeCaseFields);
+  
+  // If no fields to update, just return the existing lesson
+  if (fields.length === 0) {
+    const result = await pool.query('SELECT * FROM lessons WHERE id = $1', [id]);
+    return result.rows.length > 0 ? camelCaseKeys(result.rows[0]) : null;
+  }
+  
   const setClause = fields.map((field, index) => `${field} = $${index + 2}`).join(', ');
 
   const result = await pool.query(

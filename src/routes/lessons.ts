@@ -42,8 +42,8 @@ router.post('/', authenticateToken, requireRole(Role.EDITOR), async (req: AuthRe
     const lessonData = req.body;
 
     // Validation
-    if (lessonData.content_type === 'video' && !lessonData.duration_ms) {
-      return res.status(400).json({ error: 'Video lessons require duration_ms' });
+    if (lessonData.content_type === 'video' && (lessonData.duration_ms === null || lessonData.duration_ms === undefined || lessonData.duration_ms < 0)) {
+      return res.status(400).json({ error: 'Video lessons require positive duration_ms' });
     }
 
     if (!lessonData.content_languages_available || !lessonData.content_languages_available.includes(lessonData.content_language_primary)) {
@@ -76,7 +76,7 @@ router.put('/:id', authenticateToken, requireRole(Role.EDITOR), async (req: Auth
   try {
     const updateData = req.body;
 
-    if (updateData.content_type === 'video' && !updateData.duration_ms) {
+    if (updateData.content_type === 'video' && (updateData.duration_ms === null || updateData.duration_ms === undefined || updateData.duration_ms < 0)) {
       return res.status(400).json({ error: 'Video lessons require duration_ms' });
     }
 

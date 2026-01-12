@@ -90,14 +90,20 @@ const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson,
   };
 
   const handleSaveNewTerm = async () => {
-    if (!termTitle.trim()) return;
+    if (!termTitle.trim()) {
+      showToast?.('Please enter a term title', 'error');
+      return;
+    }
     try {
-      await api.createTerm({ program_id: id, term_number: terms.length + 1, title: termTitle });
+      const newTerm = { program_id: id, term_number: terms.length + 1, title: termTitle };
+      console.log('Creating term:', newTerm);
+      await api.createTerm(newTerm);
       showToast?.('New term created', 'success');
       setTermModalOpen(false);
       setTermTitle('');
       setRefreshTrigger(prev => prev + 1);
     } catch (err) {
+      console.error('Failed to create term:', err);
       showToast?.('Failed to create term', 'error');
     }
   };
@@ -136,7 +142,7 @@ const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson,
         title: 'Untitled Lesson',
         status: Status.DRAFT,
         content_type: 'video' as any,
-        duration_ms: 0,
+        duration_ms: 300000,
         is_paid: false,
         content_language_primary: program!.language_primary,
         content_languages_available: [program!.language_primary],
