@@ -40,10 +40,33 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res) => {
 router.post('/', authenticateToken, requireRole(Role.EDITOR), async (req: AuthRequest, res) => {
   try {
     const lessonData = req.body;
+
+    // Validation
+    if (lessonData.content_type === 'video' && !lessonData.duration_ms) {
+      return res.status(400).json({ error: 'Video lessons require duration_ms' });
+    }
+
+    if (!lessonData.content_languages_available || !lessonData.content_languages_available.includes(lessonData.content_language_primary)) {
+      return res.status(400).json({ error: 'Primary content language must be included in content_languages_available' });
+    }
+
+    if (lessonData.status === Status.SCHEDULED && !lessonData.publish_at) {
+      return res.status(400).json({ error: 'Scheduled lessons must include publish_at' });
+    }
+
+    // Ensure lesson number is unique per term
+    const existing = await getLessonsByTermId(lessonData.term_id);
+    if (existing.some(l => l.lesson_number === lessonData.lesson_number)) {
+      return res.status(409).json({ error: `Lesson number ${lessonData.lesson_number} already exists in this term` });
+    }
+
     const lesson = await createLesson(lessonData);
     res.status(201).json(lesson);
   } catch (error) {
     console.error('Create lesson error:', error);
+    if (error instanceof Error && error.message.includes('unique')) {
+      return res.status(409).json({ error: error.message });
+    }
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -51,13 +74,30 @@ router.post('/', authenticateToken, requireRole(Role.EDITOR), async (req: AuthRe
 // Update lesson (EDITOR+)
 router.put('/:id', authenticateToken, requireRole(Role.EDITOR), async (req: AuthRequest, res) => {
   try {
-    const lesson = await updateLesson(req.params.id, req.body);
+    const updateData = req.body;
+
+    if (updateData.content_type === 'video' && !updateData.duration_ms) {
+      return res.status(400).json({ error: 'Video lessons require duration_ms' });
+    }
+
+    if (updateData.content_languages_available && updateData.content_language_primary && !updateData.content_languages_available.includes(updateData.content_language_primary)) {
+      return res.status(400).json({ error: 'Primary content language must be included in content_languages_available' });
+    }
+
+    if (updateData.status === Status.SCHEDULED && !updateData.publish_at) {
+      return res.status(400).json({ error: 'Scheduled lessons must include publish_at' });
+    }
+
+    const lesson = await updateLesson(req.params.id, updateData);
     if (!lesson) {
       return res.status(404).json({ error: 'Lesson not found' });
     }
     res.json(lesson);
   } catch (error) {
     console.error('Update lesson error:', error);
+    if (error instanceof Error && error.message.includes('already exists')) {
+      return res.status(409).json({ error: error.message });
+    }
     res.status(500).json({ error: 'Internal server error' });
   }
 });

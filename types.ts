@@ -2,9 +2,9 @@
 export type UUID = string;
 
 export enum Role {
-  ADMIN = 'ADMIN',
-  EDITOR = 'EDITOR',
-  VIEWER = 'VIEWER'
+  ADMIN = 'admin',
+  EDITOR = 'editor',
+  VIEWER = 'viewer'
 }
 
 export enum Status {
@@ -55,7 +55,7 @@ export interface Program {
   published_at?: string;
   created_at: string;
   updated_at: string;
-  topic_ids: UUID[];
+  topicIds: UUID[];
 }
 
 export interface Term {

@@ -30,8 +30,8 @@ const Logo = () => (
       </svg>
     </div>
     <div className="flex flex-col leading-[0.85] pt-1">
-      <span className="font-black text-2xl tracking-tighter text-[#FFCE00] uppercase" style={{ WebkitTextStroke: '1.5px black', textShadow: '2px 2px 0px black' }}>CHAI</span>
-      <span className="font-black text-2xl tracking-tighter text-[#FFCE00] uppercase" style={{ WebkitTextStroke: '1.5px black', textShadow: '2px 2px 0px black' }}>SHOTS</span>
+      <span className="font-black text-2xl tracking-tighter text-[#FFCE00] uppercase">CHAI</span>
+      <span className="font-black text-2xl tracking-tighter text-[#FFCE00] uppercase">SHOTS</span>
     </div>
   </div>
 );
@@ -171,11 +171,11 @@ const Navbar: React.FC<NavbarProps> = ({
               className="flex items-center space-x-4 pl-2 group"
             >
               <div className="text-right hidden xs:block">
-                <div className="text-sm font-black text-slate-900 leading-none group-hover:text-amber-600 transition-colors uppercase tracking-tight">{user.username}</div>
-                <div className="text-[10px] text-slate-500 font-bold mt-1.5 truncate max-w-[140px]">{user.email}</div>
+                <div className="text-sm font-black text-slate-900 leading-none group-hover:text-amber-600 transition-colors uppercase tracking-tight">{user?.username || 'User'}</div>
+                <div className="text-[10px] text-slate-500 font-bold mt-1.5 truncate max-w-[140px]">{user?.email || ''}</div>
               </div>
               <div className="w-11 h-11 rounded-2xl bg-amber-400 flex items-center justify-center text-black font-black border-2 border-white shadow-md group-hover:rotate-6 transition-transform">
-                {user.username.charAt(0).toUpperCase()}
+                {(user?.username?.charAt(0) || 'U').toUpperCase()}
               </div>
             </button>
 

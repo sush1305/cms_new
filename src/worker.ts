@@ -26,7 +26,7 @@ async function processScheduledLessons() {
       FROM lessons
       WHERE status = 'scheduled'
       AND publish_at <= NOW()
-      FOR UPDATE
+      FOR UPDATE SKIP LOCKED
     `;
     const scheduledResult = await client.query(scheduledQuery);
     const scheduledLessons: ScheduledLesson[] = scheduledResult.rows;
@@ -36,17 +36,17 @@ async function processScheduledLessons() {
       return;
     }
 
-    // Update lessons to published status
+    // Update lessons to published status; set published_at only if not already set
     const lessonIds = scheduledLessons.map(l => l.id);
     await client.query(`
       UPDATE lessons
       SET status = 'published',
-          published_at = NOW(),
+          published_at = COALESCE(published_at, NOW()),
           updated_at = NOW()
       WHERE id = ANY($1)
     `, [lessonIds]);
 
-    // Auto-publish programs if they have published lessons
+    // Auto-publish programs if they have their first published lesson
     const termIds = [...new Set(scheduledLessons.map(l => l.term_id))];
     const programIdsResult = await client.query(`
       SELECT DISTINCT p.id
@@ -58,7 +58,7 @@ async function processScheduledLessons() {
     for (const programRow of programIdsResult.rows) {
       const programId = programRow.id;
 
-      // Check if program has any published lessons
+      // Check if program has any published lessons (including the ones we just published)
       const hasPublishedResult = await client.query(`
         SELECT EXISTS (
           SELECT 1
@@ -114,16 +114,24 @@ async function startWorker() {
   const health = await healthCheck();
   console.log('[Worker] Health check:', health);
 
-  // Process scheduled lessons every 15 seconds (same as frontend simulation)
+  // Run migrations if DB is available
+  try {
+    const { runMigrations } = await import('./db');
+    await runMigrations();
+  } catch (err) {
+    console.warn('[Worker] Skipping migrations (DB may be unavailable):', err?.message || err);
+  }
+
+  // Process scheduled lessons every 60 seconds as required by the spec
   setInterval(async () => {
     try {
       await processScheduledLessons();
     } catch (error) {
       console.error('[Worker] Error in main loop:', error);
     }
-  }, 15000);
+  }, 60 * 1000);
 
-  console.log('[Worker] Worker started successfully');
+  console.log('[Worker] Worker started successfully (interval: 60s)');
 }
 
 // Graceful shutdown

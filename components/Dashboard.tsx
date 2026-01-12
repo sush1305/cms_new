@@ -1,17 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../store';
-import { Status, Program, AssetType, AssetVariant, Role, UUID } from '../types';
-
-const { getPrograms, getTopics, getAssets, createProgram } = db;
+import { api } from '../api';
+import { Status, Program, AssetType, AssetVariant, Role, UUID, User } from '../types';
 
 interface DashboardProps {
+  user: User;
+  onLogout: () => void;
   onViewProgram: (id: string) => void;
-  canEdit: boolean;
-  userRole?: Role;
   onViewUsers?: () => void;
+  onViewSettings?: () => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ onViewProgram, canEdit, userRole, onViewUsers }) => {
+const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onViewProgram, onViewUsers, onViewSettings }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [programs, setPrograms] = useState<Program[]>([]);
   const [topics, setTopics] = useState<{id: string, name: string}[]>([]);
@@ -21,6 +20,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onViewProgram, canEdit, userRole,
   const [newProgramDomain, setNewProgramDomain] = useState('');
   const [newProgramTopics, setNewProgramTopics] = useState<UUID[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [filter, setFilter] = useState({
     status: '',
@@ -28,20 +28,50 @@ const Dashboard: React.FC<DashboardProps> = ({ onViewProgram, canEdit, userRole,
     topic: ''
   });
 
+  // Normalize program shape to defend against missing/alternate field names from API
+  const normalizeProgram = (p: any): Program => {
+    try {
+      if (!p || typeof p !== 'object') return null as any;
+      
+      const languagesAvailable = Array.isArray(p?.languages_available)
+        ? p.languages_available
+        : Array.isArray(p?.languagesAvailable)
+          ? p.languagesAvailable
+          : [];
+      return {
+        id: p?.id || '',
+        title: typeof p?.title === 'string' ? p.title : '',
+        description: typeof p?.description === 'string' ? p.description : '',
+        language_primary: p?.language_primary ?? p?.languagePrimary ?? '',
+        languages_available: languagesAvailable,
+        status: p?.status ?? Status.DRAFT,
+        published_at: p?.published_at ?? p?.publishedAt,
+        created_at: p?.created_at ?? p?.createdAt ?? '',
+        updated_at: p?.updated_at ?? p?.updatedAt ?? '',
+        topicIds: Array.isArray(p?.topicIds) ? p.topicIds : [],
+      } as Program;
+    } catch (err) {
+      console.error('Error normalizing program:', p, err);
+      return null as any;
+    }
+  };
+
   useEffect(() => {
     const loadData = async () => {
       try {
         const [programsData, topicsData] = await Promise.all([
-          getPrograms(),
-          getTopics()
+          api.getPrograms(),
+          api.getTopics()
         ]);
-        setPrograms(programsData);
-        setTopics(topicsData);
+        const safePrograms = Array.isArray(programsData) ? programsData : [];
+        const safeTopics = Array.isArray(topicsData) ? topicsData : [];
+        setPrograms(safePrograms);
+        setTopics(safeTopics);
 
         // Load posters for all programs
-        const posterPromises = programsData.map(async (program) => {
+        const posterPromises = safePrograms.map(async (program) => {
           try {
-            const assets = await getAssets(program.id);
+            const assets = await api.getAssets(program.id);
             const posterUrl = assets.find(a => a.asset_type === AssetType.POSTER && a.variant === AssetVariant.PORTRAIT)?.url;
             return { programId: program.id, posterUrl: posterUrl || 'https://picsum.photos/400/600' };
           } catch (error) {
@@ -57,30 +87,58 @@ const Dashboard: React.FC<DashboardProps> = ({ onViewProgram, canEdit, userRole,
 
         setProgramPosters(posterMap);
       } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
         console.error('Failed to load dashboard data:', error);
+        setError(errorMsg);
+        // Ensure state is always set even on error
+        setPrograms([]);
+        setTopics([]);
       } finally {
         setLoading(false);
       }
     };
+
     loadData();
   }, []);
 
-  const filteredPrograms = programs.filter(p => {
-    const normalizedQuery = searchQuery.toLowerCase().trim();
-    const searchMatch = !normalizedQuery || 
-                       p.title.toLowerCase().includes(normalizedQuery) || 
-                       p.description.toLowerCase().includes(normalizedQuery);
+  // Calculate safely with error handling
+  let safePrograms: Program[] = [];
+  let filteredPrograms: Program[] = [];
+  
+  try {
+    const temp = (Array.isArray(programs) ? programs : []).filter(Boolean).map(normalizeProgram).filter(Boolean);
+    safePrograms = Array.isArray(temp) ? temp : [];
     
-    const statusMatch = !filter.status || p.status === filter.status;
-    const langMatch = !filter.language || p.language_primary === filter.language;
-    const topicMatch = !filter.topic || p.topic_ids.includes(filter.topic);
-    
-    return searchMatch && statusMatch && langMatch && topicMatch;
-  });
+    filteredPrograms = safePrograms.filter(p => {
+      try {
+        if (!p) return false;
+        const normalizedQuery = searchQuery.toLowerCase().trim();
+        const topicIds = p.topicIds || [];
+        const languagePrimary = p.language_primary || '';
+
+        const searchMatch = !normalizedQuery || 
+                           (p.title || '').toLowerCase().includes(normalizedQuery) || 
+                           (p.description || '').toLowerCase().includes(normalizedQuery);
+        
+        const statusMatch = !filter.status || p.status === filter.status;
+        const langMatch = !filter.language || languagePrimary === filter.language;
+        const topicMatch = !filter.topic || topicIds.includes(filter.topic);
+        
+        return searchMatch && statusMatch && langMatch && topicMatch;
+      } catch (err) {
+        console.error('Error filtering program:', p, err);
+        return false;
+      }
+    });
+  } catch (calcErr) {
+    console.error('Dashboard calc error:', calcErr);
+    setError(calcErr instanceof Error ? calcErr.message : String(calcErr));
+    safePrograms = [];
+    filteredPrograms = [];
+  }
 
   const getPoster = (programId: string) => {
-    const assets = db.getAssets(programId);
-    return assets.find(a => a.asset_type === AssetType.POSTER && a.variant === AssetVariant.PORTRAIT)?.url || 'https://picsum.photos/400/600';
+    return programPosters[programId] || 'https://picsum.photos/400/600';
   };
 
   const handleConfirmCreate = async (e: React.FormEvent) => {
@@ -88,12 +146,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onViewProgram, canEdit, userRole,
     if (!newProgramTitle.trim()) return;
 
     try {
-      const newProg = await createProgram({
+      const newProg = await api.createProgram({
         title: newProgramTitle,
         description: newProgramDomain || 'Educational program exploring ' + newProgramTitle,
         language_primary: 'en',
         languages_available: ['en'],
-        topic_ids: newProgramTopics,
+        topicIds: newProgramTopics,
         status: Status.DRAFT
       });
 
@@ -103,7 +161,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onViewProgram, canEdit, userRole,
       setNewProgramTopics([]);
 
       // Refresh programs list
-      const updatedPrograms = await getPrograms();
+      const updatedPrograms = await api.getPrograms();
       setPrograms(updatedPrograms);
       onViewProgram(newProg.id);
     } catch (error) {
@@ -118,8 +176,40 @@ const Dashboard: React.FC<DashboardProps> = ({ onViewProgram, canEdit, userRole,
     );
   };
 
-  return (
-    <div className="space-y-10 pb-12 animate-fade-in">
+  // Safety check - ensure state exists
+  if (!programs) {
+    return <div className="text-red-600 p-4">Fatal: programs is null</div>;
+  }
+  if (!topics) {
+    return <div className="text-red-600 p-4">Fatal: topics is null</div>;
+  }
+
+  try {
+    if (error) {
+      return (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-6 py-4 rounded-lg">
+          <p className="font-bold">Error loading dashboard</p>
+          <p className="text-sm mt-1">{error}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="mt-3 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm font-bold"
+          >
+            Reload Page
+          </button>
+        </div>
+      );
+    }
+
+    console.log('Dashboard render:', { 
+      programs: Array.isArray(programs), 
+      topics: Array.isArray(topics),
+      filteredPrograms: Array.isArray(filteredPrograms),
+      filter,
+      searchQuery
+    });
+
+    return (
+      <div className="space-y-10 pb-12 animate-fade-in">
       {isCreatingModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-fade-in">
           <div className="bg-white rounded-[2.5rem] w-full max-w-2xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90vh]">
@@ -199,8 +289,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onViewProgram, canEdit, userRole,
           <p className="text-slate-500 mt-2 font-medium">Manage your educational shorts and program catalog.</p>
         </div>
         <div className="flex items-center space-x-3">
-          {userRole === Role.ADMIN && onViewUsers && (
-            <button 
+          {user.role === Role.ADMIN && onViewUsers && (
+            <button
               onClick={onViewUsers}
               className="bg-white text-slate-700 hover:bg-slate-50 font-black py-4 px-8 rounded-2xl transition-all flex items-center space-x-3 border border-slate-200 shadow-sm"
             >
@@ -208,8 +298,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onViewProgram, canEdit, userRole,
               <span className="text-xs uppercase tracking-widest">Manage Team</span>
             </button>
           )}
-          {canEdit && (
-            <button 
+          {user.role !== Role.VIEWER && (
+            <button
               onClick={() => setIsCreatingModalOpen(true)}
               className="bg-black text-amber-400 hover:bg-slate-800 font-black py-4 px-8 rounded-2xl shadow-xl transition-all transform hover:-translate-y-0.5 active:scale-95 flex items-center space-x-3"
             >
@@ -219,6 +309,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onViewProgram, canEdit, userRole,
           )}
         </div>
       </header>
+
 
       {/* Advanced Search & Filtering Bar */}
       <div className="bg-white p-4 rounded-[2.5rem] shadow-sm border border-slate-200 flex flex-col lg:flex-row gap-4 items-center sticky top-24 z-30 transition-all">
@@ -254,7 +345,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onViewProgram, canEdit, userRole,
               aria-label="Filter by Status"
             >
               <option value="">All</option>
-              {Object.values(Status).map(s => <option key={s} value={s}>{s}</option>)}
+              {(Status && Object.values(Status) ? Object.values(Status) : []).map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
 
@@ -267,14 +358,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onViewProgram, canEdit, userRole,
               aria-label="Filter by Topic"
             >
               <option value="">All</option>
-              {topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              {(topics || []).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-10">
-        {filteredPrograms.map(p => (
+          {((Array.isArray(filteredPrograms) ? filteredPrograms : null) || []).map(p => (
           <div 
             key={p.id}
             onClick={() => onViewProgram(p.id)}
@@ -298,7 +389,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onViewProgram, canEdit, userRole,
               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-80 group-hover:opacity-100 transition-opacity"></div>
               <div className="absolute bottom-6 left-6 right-6">
                 <div className="flex flex-wrap gap-1.5 mb-3">
-                  {p.topic_ids.map(tid => (
+                  {(p.topicIds || []).map(tid => (
                     <span key={tid} className="bg-amber-400 text-black text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-tighter shadow-sm">
                       {topics.find(t => t.id === tid)?.name}
                     </span>
@@ -313,13 +404,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onViewProgram, canEdit, userRole,
               <div className="mt-auto pt-6 flex items-center justify-between border-t border-slate-100">
                 <div className="flex items-center space-x-3">
                   <div className="flex -space-x-2">
-                    {p.languages_available.map(lang => (
+                    {(p.languages_available || []).map(lang => (
                       <div key={lang} className="w-6 h-6 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-[8px] font-black text-slate-500 uppercase">
                         {lang}
                       </div>
                     ))}
                   </div>
-                  <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{db.getTerms(p.id).length} Units</span>
+                  <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Units</span>
                 </div>
                 <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-amber-400 group-hover:text-black transition-colors">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
@@ -340,7 +431,23 @@ const Dashboard: React.FC<DashboardProps> = ({ onViewProgram, canEdit, userRole,
         )}
       </div>
     </div>
-  );
+    );
+  } catch (renderErr) {
+    console.error('Dashboard render error:', renderErr);
+    setError(renderErr instanceof Error ? renderErr.message : String(renderErr));
+    return (
+      <div className="bg-red-100 border border-red-400 text-red-700 px-6 py-4 rounded-lg">
+        <p className="font-bold">Error rendering dashboard</p>
+        <p className="text-sm mt-1">{renderErr instanceof Error ? renderErr.message : String(renderErr)}</p>
+        <button 
+          onClick={() => window.location.reload()}
+          className="mt-3 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm font-bold"
+        >
+          Reload Page
+        </button>
+      </div>
+    );
+  }
 };
 
 export default Dashboard;

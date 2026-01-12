@@ -11,8 +11,6 @@ services:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./migrations.sql:/docker-entrypoint-initdb.d/1-migrations.sql
-      - ./seed.sql:/docker-entrypoint-initdb.d/2-seed.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U chaishorts -d chaishorts_cms"]
       interval: 10s
@@ -25,6 +23,7 @@ services:
     environment:
       DATABASE_URL: postgres://chaishorts:password123@db:5432/chaishorts_cms
       NODE_ENV: production
+      JWT_SECRET: ${JWT_SECRET:-change-this-in-prod}
     ports:
       - "3002:3000"
     depends_on:
@@ -36,6 +35,7 @@ services:
     command: ["npm", "run", "worker"]
     environment:
       DATABASE_URL: postgres://chaishorts:password123@db:5432/chaishorts_cms
+      JWT_SECRET: ${JWT_SECRET:-change-this-in-prod}
     depends_on:
       db:
         condition: service_healthy
@@ -45,7 +45,7 @@ services:
     container_name: cms-web
     command: ["npm", "run", "dev"]
     ports:
-      - "3000:3000"
+      - "3000:3001"
     environment:
       API_URL: http://api:3000
 

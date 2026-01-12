@@ -37,12 +37,27 @@ router.post('/', authenticateToken, requireRole(Role.ADMIN), async (req: AuthReq
   try {
     const { username, email, password, role } = req.body;
 
-    // Store password in plain text
+    if (!password || password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+
+    // Use native bcrypt if available, otherwise fall back to bcryptjs
+    let hashed: string;
+    try {
+      const bcrypt = await import('bcrypt');
+      hashed = await bcrypt.hash(password, 10);
+    } catch (err) {
+      console.warn('bcrypt native failed to load for create user, falling back to bcryptjs:', err?.message || err);
+      const bcryptjs = await import('bcryptjs');
+      const bcryptjsModule: any = (bcryptjs as any).default || bcryptjs;
+      hashed = bcryptjsModule.hashSync(password, 10);
+    }
+
     const user = await createUser({
       username,
       email,
-      password: password,
-      role: role || Role.VIEWER
+      password: hashed,
+      role: (role || Role.VIEWER) as any
     });
 
     // Remove password from response
@@ -95,20 +110,58 @@ router.put('/:id/password', authenticateToken, async (req: AuthRequest, res) => 
     const { currentPassword, newPassword } = req.body;
 
     // Verify current password if not admin
-    if (req.user!.role !== Role.ADMIN) {
-      const user = await getUserById(req.params.id);
-      if (!user || currentPassword !== user.password) {
-        return res.status(400).json({ error: 'Current password is incorrect' });
+    // Use native bcrypt if available, otherwise fall back to bcryptjs
+    try {
+      const bcrypt = await import('bcrypt');
+
+      if (req.user!.role !== Role.ADMIN) {
+        const user = await getUserById(req.params.id);
+        if (!user) {
+          return res.status(400).json({ error: 'User not found' });
+        }
+
+        const ok = await bcrypt.compare(currentPassword, user.password || '');
+        if (!ok) {
+          return res.status(400).json({ error: 'Current password is incorrect' });
+        }
       }
-    }
 
-    // Store new password in plain text
-    const success = await changePassword(req.params.id, newPassword);
-    if (!success) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+      // Store new password hashed
+      const hashedNew = await bcrypt.hash(newPassword, 10);
+      const success = await changePassword(req.params.id, hashedNew);
+      if (!success) {
+        return res.status(404).json({ error: 'User not found' });
+      }
 
-    res.json({ message: 'Password updated successfully' });
+      res.json({ message: 'Password updated successfully' });
+      return;
+    } catch (err) {
+      console.warn('bcrypt native failed to load for change password, falling back to bcryptjs:', err?.message || err);
+      const bcryptjs = await import('bcryptjs');
+      const bcryptjsModule: any = (bcryptjs as any).default || bcryptjs;
+
+      if (req.user!.role !== Role.ADMIN) {
+        const user = await getUserById(req.params.id);
+        if (!user) {
+          return res.status(400).json({ error: 'User not found' });
+        }
+
+        const ok = bcryptjsModule.compareSync(currentPassword, user.password || '');
+        if (!ok) {
+          return res.status(400).json({ error: 'Current password is incorrect' });
+        }
+      }
+
+      // Store new password hashed
+      const hashedNew = bcryptjsModule.hashSync(newPassword, 10);
+      const success = await changePassword(req.params.id, hashedNew);
+      if (!success) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      res.json({ message: 'Password updated successfully' });
+      return;
+    }
   } catch (error) {
     console.error('Change password error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -130,6 +183,9 @@ router.delete('/:id', authenticateToken, requireRole(Role.ADMIN), async (req: Au
     res.status(204).send();
   } catch (error) {
     console.error('Delete user error:', error);
+    if (error instanceof Error && error.message.includes('last admin')) {
+      return res.status(400).json({ error: error.message });
+    }
     res.status(500).json({ error: 'Internal server error' });
   }
 });

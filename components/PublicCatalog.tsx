@@ -28,7 +28,7 @@ const PublicCatalog: React.FC = () => {
 
       return {
         ...p,
-        topics: p.topic_ids.map(tid => topics.find(t => t.id === tid)?.name || ''),
+        topics: p.topicIds.map(tid => topics.find(t => t.id === tid)?.name || ''),
         assets: { posters: posterMap }
       } as CatalogProgram;
     })

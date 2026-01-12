@@ -47,11 +47,15 @@ router.post('/', authenticateToken, requireRole(Role.EDITOR), async (req: AuthRe
     res.status(201).json(program);
   } catch (error) {
     console.error('Create program error:', error);
-    if (error.message.includes('already exists')) {
-      res.status(409).json({ error: error.message });
-    } else {
-      res.status(500).json({ error: 'Internal server error' });
+    if (error instanceof Error) {
+      if (error.message.includes('already exists')) {
+        return res.status(409).json({ error: error.message });
+      }
+      if (error.message.includes('Primary language') || error.message.includes('cannot be published')) {
+        return res.status(400).json({ error: error.message });
+      }
     }
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -65,6 +69,9 @@ router.put('/:id', authenticateToken, requireRole(Role.EDITOR), async (req: Auth
     res.json(program);
   } catch (error) {
     console.error('Update program error:', error);
+    if (error instanceof Error && error.message.includes('cannot be published')) {
+      return res.status(400).json({ error: error.message });
+    }
     res.status(500).json({ error: 'Internal server error' });
   }
 });

@@ -44,11 +44,12 @@ export function requireRole(requiredRole: Role) {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    const roleHierarchy = { ADMIN: 3, EDITOR: 2, VIEWER: 1 };
-    const userRoleLevel = roleHierarchy[req.user.role];
-    const requiredRoleLevel = roleHierarchy[requiredRole];
+    // normalize roles to lower-case for comparison
+    const roleHierarchy: Record<string, number> = { admin: 3, editor: 2, viewer: 1 };
+    const userRoleLevel = roleHierarchy[(req.user.role || '').toLowerCase()];
+    const requiredRoleLevel = roleHierarchy[(requiredRole || '').toLowerCase()];
 
-    if (userRoleLevel < requiredRoleLevel) {
+    if (!userRoleLevel || userRoleLevel < requiredRoleLevel) {
       return res.status(403).json({ error: 'Insufficient permissions' });
     }
 

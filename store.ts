@@ -124,40 +124,47 @@ class Database {
   }
 
   createProgram(program: Partial<Program>) {
-    const newProg = { 
-      ...program, 
-      id: generateId(), 
+    const newProg = {
+      ...program,
+      id: generateId(),
       status: Status.DRAFT,
-      created_at: new Date().toISOString(), 
+      created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       languages_available: program.languages_available || [program.language_primary || 'en'],
-      topic_ids: program.topic_ids || []
+      topicIds: program.topicIds || []
     } as Program;
     this.programs.push(newProg);
     this.save();
     return newProg;
   }
 
-  updateProgram(program: Program) {
+  updateProgram(id: string, program: Partial<Program>): Program | null {
+    const existing = this.programs.find(p => p.id === id);
+    if (!existing) return null;
+
+    const updated = { ...existing, ...program, updated_at: new Date().toISOString() };
     // Enforce logic: Primary language must be in available languages
-    if (!program.languages_available.includes(program.language_primary)) {
-        program.languages_available.push(program.language_primary);
+    if (!updated.languages_available.includes(updated.language_primary)) {
+        updated.languages_available.push(updated.language_primary);
     }
 
-    const idx = this.programs.findIndex(p => p.id === program.id);
-    if (idx !== -1) {
-      this.programs[idx] = { ...program, updated_at: new Date().toISOString() };
-      this.save();
-    }
+    const idx = this.programs.findIndex(p => p.id === id);
+    this.programs[idx] = updated;
+    this.save();
+    return updated;
   }
 
-  deleteProgram(id: string) {
+  deleteProgram(id: string): boolean {
+    const exists = this.programs.some(p => p.id === id);
+    if (!exists) return false;
+
     const pTerms = this.terms.filter(t => t.program_id === id).map(t => t.id);
     this.programs = this.programs.filter(p => p.id !== id);
     this.terms = this.terms.filter(t => t.program_id !== id);
     this.lessons = this.lessons.filter(l => !pTerms.includes(l.term_id));
     this.assets = this.assets.filter(a => a.parent_id !== id && !pTerms.includes(a.parent_id));
     this.save();
+    return true;
   }
 
   createTerm(term: Partial<Term>) {
@@ -285,7 +292,7 @@ class Database {
         status: Status.PUBLISHED,
         published_at: program.published_at || new Date().toISOString()
       };
-      this.updateProgram(updatedProgram);
+      this.updateProgram(updatedProgram.id, updatedProgram);
     }
   }
 

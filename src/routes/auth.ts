@@ -15,11 +15,33 @@ router.post('/login', async (req, res) => {
 
     const user = await getUserByEmail(email);
     if (!user) {
+      console.log('login: user not found', email);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Check password (plain text comparison for both modes)
-    const isValidPassword = password === user.password;
+    // Check password - handle both offline (plain text) and online (hashed) modes
+    let isValidPassword = false;
+    if (isOffline) {
+      // In offline mode, passwords are stored in plain text
+      isValidPassword = password === user.password;
+      console.log('login attempt (offline):', email, 'password match:', isValidPassword);
+    } else {
+      // In online mode, passwords are hashed with bcrypt. Use native bcrypt if available,
+      // otherwise fall back to bcryptjs to avoid native module loading issues in some containers.
+      try {
+        const bcrypt = await import('bcrypt');
+        console.log('login attempt (bcrypt native):', email);
+        console.log('user.password (hash):', user.password);
+        isValidPassword = await bcrypt.compare(password, user.password || '');
+      } catch (err) {
+        console.warn('bcrypt native failed to load, falling back to bcryptjs:', err?.message || err);
+        const bcryptjs = await import('bcryptjs');
+        const bcryptjsModule: any = (bcryptjs as any).default || bcryptjs;
+        isValidPassword = bcryptjsModule.compareSync(password, user.password || '');
+      }
+      console.log('isValidPassword:', isValidPassword);
+    }
+
     if (!isValidPassword) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }

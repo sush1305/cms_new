@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { db } from '../store';
-import { 
-  Program, Term, Status, Role, Topic, AssetType, AssetVariant, Asset 
+import React, { useState, useEffect } from 'react';
+import { api } from '../api';
+import { getLessonsByTermId } from '../src/db';
+import {
+  Program, Term, Status, Role, Topic, AssetType, AssetVariant, Asset, Lesson
 } from '../types';
 
 interface ProgramDetailProps {
@@ -13,78 +14,121 @@ interface ProgramDetailProps {
 }
 
 const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson, role, showToast }) => {
-  const [program, setProgram] = useState<Program | undefined>(db.getProgram(id));
+  const [program, setProgram] = useState<Program | undefined>(undefined);
   const [lessonStatusFilter, setLessonStatusFilter] = useState<string>('');
-  const [refreshTrigger, setRefreshTrigger] = useState(0); 
-  
-  const topics = db.getTopics();
-  const terms = db.getTerms(id);
-  const assets = db.getAssets(id);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [terms, setTerms] = useState<Term[]>([]);
+  const [assets, setAssets] = useState<Asset[]>([]);
   const [activeTab, setActiveTab] = useState<'info' | 'assets' | 'content'>('content');
+  const [lessonsByTerm, setLessonsByTerm] = useState<Record<string, Lesson[]>>({});
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [prog, tms, tpcs, asts] = await Promise.all([
+          api.getProgram(id),
+          api.getTerms(id),
+          api.getTopics(),
+          api.getAssets(id)
+        ]);
+        setProgram(prog);
+        setTerms(tms);
+        setTopics(tpcs as any);
+        setAssets(asts);
+      } catch (err) {
+        console.error('Failed to load program details', err);
+      }
+    };
+    load();
+  }, [id, refreshTrigger]);
 
   if (!program) return <div className="p-20 text-center font-black text-slate-400 uppercase tracking-widest">Program not found</div>;
 
-  const handleUpdate = () => {
-    db.updateProgram(program);
-    showToast?.('Program settings saved', 'success');
-  };
-
-  const handleDeleteProgram = () => {
-    if (confirm(`CRITICAL: This will permanently delete "${program.title}" and all associated content. Continue?`)) {
-      db.deleteProgram(id);
-      showToast?.('Program deleted', 'info');
-      onBack();
+  const handleUpdate = async () => {
+    if (!program) return;
+    try {
+      const updated = await api.updateProgram(program.id, program);
+      setProgram(updated);
+      showToast?.('Program settings saved', 'success');
+    } catch (err) {
+      showToast?.('Failed to save program', 'error');
     }
   };
 
-  const handleCreateTerm = () => {
+  const handleDeleteProgram = async () => {
+    if (!program) return;
+    if (confirm(`CRITICAL: This will permanently delete "${program.title}" and all associated content. Continue?`)) {
+      try {
+        await api.deleteProgram(program.id);
+        showToast?.('Program deleted', 'info');
+        onBack();
+      } catch (err) {
+        showToast?.('Delete failed', 'error');
+      }
+    }
+  };
+
+  const handleCreateTerm = async () => {
     if (role === Role.VIEWER) return;
     const title = prompt('Term Title:');
     if (title === null) return;
-    db.createTerm({
-      program_id: id,
-      term_number: terms.length + 1,
-      title: title || `Term ${terms.length + 1}`
-    });
-    showToast?.('New term created', 'success');
-    setRefreshTrigger(prev => prev + 1);
-  };
-
-  const handleDeleteTerm = (termId: string) => {
-    if (confirm('Are you sure you want to delete this term and all its lessons? This action is permanent.')) {
-      db.deleteTerm(termId);
-      showToast?.('Term removed', 'info');
+    try {
+      await api.createTerm({ program_id: id, term_number: terms.length + 1, title: title || `Term ${terms.length + 1}` });
+      showToast?.('New term created', 'success');
       setRefreshTrigger(prev => prev + 1);
+    } catch (err) {
+      showToast?.('Failed to create term', 'error');
     }
   };
 
-  const handleDeleteLesson = (e: React.MouseEvent, lessonId: string, title: string) => {
+  const handleDeleteTerm = async (termId: string) => {
+    if (confirm('Are you sure you want to delete this term and all its lessons? This action is permanent.')) {
+      try {
+        await api.deleteTerm(id, termId);
+        showToast?.('Term removed', 'info');
+        setRefreshTrigger(prev => prev + 1);
+      } catch (err) {
+        showToast?.('Failed to delete term', 'error');
+      }
+    }
+  };
+
+  const handleDeleteLesson = async (e: React.MouseEvent, lessonId: string, title: string) => {
     e.stopPropagation();
     if (confirm(`Are you sure you want to delete lesson "${title}"?`)) {
-      db.deleteLesson(lessonId);
-      showToast?.('Lesson deleted', 'info');
-      setRefreshTrigger(prev => prev + 1);
+      try {
+        await api.deleteLesson(lessonId);
+        showToast?.('Lesson deleted', 'info');
+        setRefreshTrigger(prev => prev + 1);
+      } catch (err) {
+        showToast?.('Failed to delete lesson', 'error');
+      }
     }
   };
 
-  const handleAddLesson = (termId: string) => {
+  const handleAddLesson = async (termId: string) => {
     if (role === Role.VIEWER) return;
-    const existing = db.getLessons(termId);
-    const newLesson = db.createLesson({
-      term_id: termId,
-      lesson_number: existing.length + 1,
-      title: 'Untitled Lesson',
-      status: Status.DRAFT,
-      content_type: 'video' as any,
-      is_paid: false,
-      content_language_primary: program.language_primary,
-      content_languages_available: [program.language_primary],
-      content_urls_by_language: { [program.language_primary]: '' },
-      subtitle_languages: [],
-      subtitle_urls_by_language: {}
-    });
-    showToast?.('Draft lesson added', 'success');
-    onEditLesson(newLesson.id);
+    try {
+      const newLesson = await api.createLesson({
+        term_id: termId,
+        lesson_number: (lessonsByTerm[termId] || []).length + 1,
+        title: 'Untitled Lesson',
+        status: Status.DRAFT,
+        content_type: 'video' as any,
+        duration_ms: 0,
+        is_paid: false,
+        content_language_primary: program!.language_primary,
+        content_languages_available: [program!.language_primary],
+        content_urls_by_language: { [program!.language_primary]: '' },
+        subtitle_languages: [],
+        subtitle_urls_by_language: {}
+      });
+      showToast?.('Draft lesson added', 'success');
+      onEditLesson(newLesson.id);
+    } catch (err) {
+      showToast?.('Failed to add lesson', 'error');
+    }
   };
 
   return (
@@ -200,7 +244,7 @@ const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson,
                 </div>
               ) : (
                 terms.map(term => {
-                  const termLessons = db.getLessons(term.id).filter(l => !lessonStatusFilter || l.status === lessonStatusFilter);
+                  const termLessons = (lessonsByTerm[term.id] || []).filter(l => !lessonStatusFilter || l.status === lessonStatusFilter);
                   return (
                     <div key={term.id} className="bg-slate-50 rounded-[2.5rem] border border-slate-100 overflow-hidden">
                       <div className="px-10 py-6 bg-slate-100/50 flex items-center justify-between border-b border-slate-200">
@@ -341,12 +385,15 @@ const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson,
                         {asset ? <img src={asset.url} alt={variant} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" /> : <div className="w-full h-full flex items-center justify-center text-slate-300 font-black uppercase text-[10px] tracking-widest">Missing</div>}
                         {role !== Role.VIEWER && (
                           <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 flex items-center justify-center backdrop-blur-[4px] transition-all">
-                            <button onClick={() => {
+                            <button onClick={async () => {
                               const url = prompt('Poster URL:', asset?.url || '');
-                              if (url !== null) {
-                                db.upsertAsset({ parent_id: id, language: program.language_primary, variant, asset_type: AssetType.POSTER, url });
+                              if (url === null) return;
+                              try {
+                                await api.createAsset({ parent_id: id, language: program.language_primary, variant, asset_type: AssetType.POSTER, url });
                                 showToast?.('Poster updated', 'success');
                                 setRefreshTrigger(prev => prev + 1);
+                              } catch (err) {
+                                showToast?.('Failed to update poster', 'error');
                               }
                             }} className="bg-amber-400 text-black px-8 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-2xl scale-90 group-hover:scale-100 transition-all">Link Artwork</button>
                           </div>

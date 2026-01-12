@@ -9,24 +9,46 @@ import programRoutes from './routes/programs';
 import lessonRoutes from './routes/lessons';
 import userRoutes from './routes/users';
 import catalogRoutes from './routes/catalog';
+import topicsRoutes from './routes/topics';
+import assetsRoutes from './routes/assets';
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+// Allow tests to override port using TEST_PORT to avoid dotenv or environment conflicts
+const PORT = process.env.TEST_PORT || process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
+// Structured request logging
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(JSON.stringify({
+      method: req.method,
+      path: req.path,
+      status: res.statusCode,
+      duration_ms: duration,
+      timestamp: new Date().toISOString()
+    }));
+  });
+  next();
+});
+
 // Health check
+import { dbHealth } from './db';
+
 app.get('/health', async (req, res) => {
   try {
-    // TODO: Add database health check
+    const db = await dbHealth();
     res.json({
-      status: 'OK',
+      status: db.ok ? 'OK' : 'DEGRADED',
       timestamp: new Date().toISOString(),
-      version: '1.0.0'
+      version: '1.0.0',
+      db
     });
   } catch (error) {
     res.status(500).json({ error: 'Health check failed' });
@@ -41,6 +63,16 @@ app.use('/api/users', userRoutes);
 
 // Public Catalog API (no auth required)
 app.use('/api/catalog', catalogRoutes);
+
+// Topics (authenticated)
+app.use('/api/topics', topicsRoutes);
+
+// Assets (program & lesson assets)
+app.use('/api/assets', assetsRoutes);
+
+// Terms & term-scoped lesson routes
+import termsRoutes from './routes/terms';
+app.use('/api/terms', termsRoutes);
 
 // 404 handler
 app.use((req, res) => {

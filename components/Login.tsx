@@ -50,8 +50,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
     try {
       await onLogin(email, password);
-    } catch (error) {
-      setError('Access denied. Invalid credentials provided.');
+    } catch (error: any) {
+      setError(error?.message || 'Access denied. Invalid credentials provided.');
     } finally {
       setIsLoading(false);
     }
