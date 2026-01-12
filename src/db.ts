@@ -63,41 +63,46 @@ export async function runMigrations() {
 
 // Initialize database connection
 export async function initDb() {
+  console.log('[DB] Initializing database connection...');
+  console.log('[DB] DATABASE_URL present:', !!process.env.DATABASE_URL);
+  
   if (!process.env.DATABASE_URL) {
     isOffline = true;
-    console.log('Using offline mode with local storage');
+    console.log('[DB] ❌ No DATABASE_URL, using offline mode with local storage');
     return;
   }
+
+  console.log('[DB] DATABASE_URL:', process.env.DATABASE_URL.substring(0, 50) + '...');
 
   // Retry database connection up to 10 times with 2 second intervals
   for (let i = 0; i < 10; i++) {
     try {
       await pool.query('SELECT 1');
-      console.log('Database connected');
+      console.log('[DB] ✅ Database connected successfully');
 
       // Run migrations on startup
       try {
         await runMigrations();
       } catch (err) {
-        console.error('Migration failure:', err.message || err);
+        console.error('[DB] Migration failure:', err.message || err);
         throw err;
       }
 
       isOffline = false;
       return;
     } catch (error) {
-      console.error(`Database connection attempt ${i + 1} failed:`, (error as Error).message);
+      console.error(`[DB] Connection attempt ${i + 1}/10 failed:`, (error as Error).message);
       if (i < 9) {
-        console.log('Retrying in 2 seconds...');
+        console.log(`[DB] Retrying in 2 seconds...`);
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
     }
   }
 
   // If all retries failed, set offline mode
-  console.error('Database connection failed after 10 attempts, using offline mode');
+  console.error('[DB] ❌ Database connection failed after 10 attempts, using offline mode');
   isOffline = true;
-  console.log('Using offline mode with local storage');
+  console.log('[DB] Using offline mode with local storage');
 }
 
 // Utility function to convert snake_case to camelCase
