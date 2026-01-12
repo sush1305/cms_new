@@ -109,6 +109,10 @@ function camelCaseKeys(obj: any): any {
   const result: any = {};
   for (const [key, value] of Object.entries(obj)) {
     const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    // Skip timestamp fields so we can handle them separately
+    if (['createdAt', 'updatedAt', 'publishedAt', 'created_at', 'updated_at', 'published_at'].includes(camelKey) || ['createdAt', 'updatedAt', 'publishedAt', 'created_at', 'updated_at', 'published_at'].includes(key)) {
+      continue;
+    }
     result[camelKey] = camelCaseKeys(value);
   }
   return result;
@@ -765,12 +769,17 @@ export async function getPublishedProgramsCursor(opts: { limit?: number; cursor?
   const result = await pool.query(sql, params);
   const rows = result.rows.map(row => {
     const camelized = camelCaseKeys(row);
+    // Ensure all timestamp fields are ISO strings
+    const createdAt = row.created_at ? (row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at)) : null;
+    const updatedAt = row.updated_at ? (row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at)) : null;
+    const publishedAt = row.published_at ? (row.published_at instanceof Date ? row.published_at.toISOString() : String(row.published_at)) : null;
+    
     return {
       ...camelized,
       topicIds: row.topic_ids || [],
-      createdAt: row.created_at?.toISOString?.() || camelized.createdAt,
-      updatedAt: row.updated_at?.toISOString?.() || camelized.updatedAt,
-      publishedAt: row.published_at?.toISOString?.() || camelized.publishedAt
+      createdAt,
+      updatedAt,
+      publishedAt
     };
   });
 
