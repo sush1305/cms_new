@@ -22,8 +22,19 @@ router.get('/', authenticateToken, async (req, res) => {
 router.post('/', authenticateToken, requireRole(Role.EDITOR), async (req, res) => {
   try {
     const { parent_id, language, variant, asset_type, url } = req.body;
-    if (!parent_id || !language || !variant || !asset_type || !url) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    
+    console.log('[Assets API] Received request:', { parent_id, language, variant, asset_type, url });
+    
+    const missing = [];
+    if (!parent_id) missing.push('parent_id');
+    if (!language) missing.push('language');
+    if (!variant) missing.push('variant');
+    if (!asset_type) missing.push('asset_type');
+    if (!url) missing.push('url');
+    
+    if (missing.length > 0) {
+      console.error('[Assets API] Missing fields:', missing);
+      return res.status(400).json({ error: `Missing required fields: ${missing.join(', ')}` });
     }
 
     const asset = await createAsset({ parent_id, language, variant, asset_type, url });

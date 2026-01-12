@@ -35,22 +35,7 @@ const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson,
           api.getTopics(),
           api.getAssets(id)
         ]);
-
-        // Normalize program to snake_case keys expected by API/updateProgram
-        const fallbackLang = (prog as any).language_primary || (prog as any).languagePrimary || (Array.isArray((prog as any).languagesAvailable) ? (prog as any).languagesAvailable[0] : '') || 'en';
-        const normalizedProgram: any = {
-          id: (prog as any).id,
-          title: (prog as any).title,
-          description: (prog as any).description,
-          language_primary: fallbackLang,
-          languages_available: (prog as any).languages_available ?? (prog as any).languagesAvailable ?? [],
-          status: (prog as any).status,
-          published_at: (prog as any).published_at ?? (prog as any).publishedAt,
-          created_at: (prog as any).created_at ?? (prog as any).createdAt,
-          updated_at: (prog as any).updated_at ?? (prog as any).updatedAt,
-          topicIds: (prog as any).topicIds ?? [],
-        };
-        setProgram(normalizedProgram);
+        setProgram(prog);
         setTerms(tms);
         setTopics(tpcs as any);
         setAssets(asts);
@@ -184,13 +169,18 @@ const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson,
     }
   };
 
+  // Render loading state - no JSX wrapping to avoid hook count issues
+  if (!program) {
+    return (
+      <div className="p-20 text-center font-black text-slate-400 uppercase tracking-widest">
+        Program not found
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 pb-20 animate-fade-in">
-      {!program ? (
-        <div className="p-20 text-center font-black text-slate-400 uppercase tracking-widest">Program not found</div>
-      ) : (
-        <>
-          {/* Breadcrumbs & Header */}
+      {/* Breadcrumbs & Header */}
       <nav className="flex items-center space-x-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2">
         <button onClick={onBack} className="hover:text-amber-600 transition-colors">Library</button>
         <span>/</span>
@@ -390,7 +380,7 @@ const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson,
                 <div className="space-y-3">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Program Name</label>
                   <input
-                    type="text" value={program.title || ''}
+                    type="text" value={program.title}
                     disabled={role === Role.VIEWER}
                     onChange={(e) => setProgram({...program, title: e.target.value})}
                     className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl py-5 px-8 focus:bg-white focus:border-amber-400 outline-none font-black text-slate-900 transition-all uppercase tracking-tight"
@@ -400,7 +390,7 @@ const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson,
                 <div className="space-y-3">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Primary Language</label>
                   <input
-                    type="text" value={program.language_primary || ''}
+                    type="text" value={program.language_primary}
                     disabled={role === Role.VIEWER}
                     onChange={(e) => setProgram({...program, language_primary: e.target.value})}
                     className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl py-5 px-8 focus:bg-white focus:border-amber-400 outline-none font-black text-slate-900 transition-all uppercase tracking-widest"
@@ -412,7 +402,7 @@ const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson,
                 <div className="space-y-3">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Program Narrative</label>
                   <textarea
-                    value={program.description || ''}
+                    value={program.description}
                     disabled={role === Role.VIEWER}
                     onChange={(e) => setProgram({...program, description: e.target.value})}
                     rows={5}
@@ -463,24 +453,19 @@ const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson,
                           <button
                             onClick={async () => {
                               if (!editingUrl.trim()) return;
-                                                            console.log('Program language_primary:', program.language_primary);
-                                                            console.log('Program object:', program);
                               try {
-                                const assetData = {
-                                  parent_id: id,
-                                  language: program.language_primary || (Array.isArray(program.languages_available) ? program.languages_available[0] : '') || 'en',
-                                  variant,
-                                  asset_type: AssetType.POSTER,
-                                  url: editingUrl
-                                };
-                                console.log('Creating asset with data:', assetData);
-                                await api.createAsset(assetData);
+                                await api.createAsset({ 
+                                  parent_id: id, 
+                                  language: program.language_primary, 
+                                  variant, 
+                                  asset_type: AssetType.POSTER, 
+                                  url: editingUrl 
+                                });
                                 showToast?.('Poster updated', 'success');
                                 setPosterUrls({...posterUrls, [variant]: ''});
                                 setRefreshTrigger(prev => prev + 1);
-                              } catch (err: any) {
-                                console.error('Asset creation failed:', err);
-                                showToast?.(`Failed to update poster: ${err.message || 'Unknown error'}`, 'error');
+                              } catch (err) {
+                                showToast?.('Failed to update poster', 'error');
                               }
                             }}
                             className="w-full bg-amber-400 hover:bg-amber-500 text-black px-6 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-colors"
@@ -525,13 +510,8 @@ const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson,
           </div>
         </div>
       )}
-        </>
-      )}
     </div>
   );
 };
 
 export default ProgramDetail;
-
-
-
