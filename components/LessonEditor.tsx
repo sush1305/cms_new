@@ -245,11 +245,29 @@ const LessonEditor: React.FC<LessonEditorProps> = ({ id, onBack, role }) => {
 
           <div className="space-y-6">
             <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Content URLs</h3>
-            {(lesson.content_languages_available || []).map(lang => (
+            <div className="space-y-3">
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Primary Language URL</label>
+              <input
+                type="url"
+                placeholder="https://example.com/video"
+                value={(lesson.content_urls_by_language || {})[lesson.content_language_primary] || ''}
+                onChange={(e) => setLesson({
+                  ...lesson,
+                  content_urls_by_language: {
+                    ...(lesson.content_urls_by_language || {}),
+                    [lesson.content_language_primary]: e.target.value
+                  }
+                })}
+                className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl py-4 px-6 focus:bg-white focus:border-amber-400 outline-none font-bold text-slate-800"
+                aria-label="Primary Language URL"
+              />
+            </div>
+            {(lesson.content_languages_available || []).filter(lang => lang !== lesson.content_language_primary).map(lang => (
               <div key={lang} className="space-y-3">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{lang.toUpperCase()} URL</label>
                 <input
                   type="url"
+                  placeholder="https://example.com/video"
                   value={(lesson.content_urls_by_language || {})[lang] || ''}
                   onChange={(e) => setLesson({
                     ...lesson,
