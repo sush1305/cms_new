@@ -24,6 +24,7 @@ const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson,
   const [lessonsByTerm, setLessonsByTerm] = useState<Record<string, Lesson[]>>({});
   const [termModalOpen, setTermModalOpen] = useState(false);
   const [termTitle, setTermTitle] = useState('');
+  const [posterUrls, setPosterUrls] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const load = async () => {
@@ -417,7 +418,7 @@ const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson,
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
                 {[AssetVariant.PORTRAIT, AssetVariant.LANDSCAPE].map(variant => {
                   const asset = assets.find(a => a.variant === variant && a.asset_type === AssetType.POSTER);
-                  const [editingUrl, setEditingUrl] = React.useState(asset?.url || '');
+                  const editingUrl = posterUrls[variant] !== undefined ? posterUrls[variant] : (asset?.url || '');
                   
                   return (
                     <div key={variant} className="space-y-4 border border-slate-200 rounded-3xl p-8 bg-slate-50">
@@ -438,8 +439,8 @@ const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson,
                           <input
                             type="url"
                             placeholder="https://example.com/image.jpg"
-                            defaultValue={asset?.url || ''}
-                            onChange={(e) => setEditingUrl(e.target.value)}
+                            value={editingUrl}
+                            onChange={(e) => setPosterUrls({...posterUrls, [variant]: e.target.value})}
                             className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-sm font-medium focus:border-amber-400 focus:outline-none"
                           />
                           <button
@@ -454,6 +455,7 @@ const ProgramDetail: React.FC<ProgramDetailProps> = ({ id, onBack, onEditLesson,
                                   url: editingUrl 
                                 });
                                 showToast?.('Poster updated', 'success');
+                                setPosterUrls({...posterUrls, [variant]: ''});
                                 setRefreshTrigger(prev => prev + 1);
                               } catch (err) {
                                 showToast?.('Failed to update poster', 'error');
