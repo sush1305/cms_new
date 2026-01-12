@@ -17,5 +17,9 @@ RUN npm run build
 # Expose port
 EXPOSE 3000
 
-# Start the server
-CMD ["npm", "run", "server"]
+# Copy start script
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
+# Start both API and worker
+CMD ["/app/start.sh"]
