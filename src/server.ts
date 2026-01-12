@@ -78,6 +78,22 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Custom JSON replacer for Date serialization
+app.use((req, res, next) => {
+  const originalJson = res.json;
+  res.json = function(data: any) {
+    const replacer = (key: string, value: any) => {
+      if (value instanceof Date) {
+        return value.toISOString();
+      }
+      return value;
+    };
+    res.set('Content-Type', 'application/json');
+    res.send(JSON.stringify(data, replacer));
+  };
+  next();
+});
+
 // Structured request logging
 app.use((req, res, next) => {
   const start = Date.now();
