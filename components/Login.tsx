@@ -217,24 +217,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               <p className="text-[9px] font-bold text-slate-400 italic">Didn't receive it? Check your spam folder or try again.</p>
             </div>
           )}
-
-          <div className="mt-12 pt-10 border-t border-slate-100 flex flex-col">
-            <p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.4em] mb-6 text-center">Development Access Panel</p>
-            <div className="grid grid-cols-1 gap-3">
-               <div className="flex flex-col sm:flex-row justify-between items-center bg-slate-50/50 p-4 rounded-2xl border border-slate-100 group/access hover:bg-slate-100 transition-colors">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Admin</span>
-                  <span className="text-[10px] font-bold text-slate-700">admin@chaishorts.com / admin123</span>
-               </div>
-               <div className="flex flex-col sm:flex-row justify-between items-center bg-slate-50/50 p-4 rounded-2xl border border-slate-100 group/access hover:bg-slate-100 transition-colors">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Editor</span>
-                  <span className="text-[10px] font-bold text-slate-700">editor@chaishorts.com / editor123</span>
-               </div>
-               <div className="flex flex-col sm:flex-row justify-between items-center bg-slate-50/50 p-4 rounded-2xl border border-slate-100 group/access hover:bg-slate-100 transition-colors">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Viewer</span>
-                  <span className="text-[10px] font-bold text-slate-700">viewer@chaishorts.com / viewer123</span>
-               </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
